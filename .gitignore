@@ -1,15 +1,97 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# =============================================================================
+# DisplayConnect — Android + ESP32 (Arduino)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Gradle / Android Build
+# -----------------------------------------------------------------------------
+.gradle/
+build/
+**/build/
+!**/src/**/build/
+
+# Gradle local config (SDK path — específico de cada máquina)
 local.properties
+
+# APK / AAB
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Android Profiling
+*.hprof
+
+# NDK / CMake
+.externalNativeBuild/
+.cxx/
+*.so
+!gradle/wrapper/gradle-wrapper.jar
+
+# Kotlin
+.kotlin/
+
+# -----------------------------------------------------------------------------
+# Android Studio / IntelliJ IDEA
+# -----------------------------------------------------------------------------
+*.iml
+.idea/
+!.idea/runConfigurations/
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+
+# Capturas de layout do Android Studio
+/captures/
+captures/
+
+# -----------------------------------------------------------------------------
+# Sistema operacional
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# -----------------------------------------------------------------------------
+# Logs e temporários
+# -----------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.swp
+*~
+
+# -----------------------------------------------------------------------------
+# ESP32 — DisplaySender (Arduino)
+# -----------------------------------------------------------------------------
+# Credenciais Wi-Fi (use config.h.example como modelo)
+DisplaySender/config.h
+
+# Saídas de compilação Arduino / PlatformIO (se usar no futuro)
+DisplaySender/build/
+DisplaySender/.pio/
+DisplaySender/.vscode/
+*.elf
+*.bin
+*.map
+
+# -----------------------------------------------------------------------------
+# Cursor / ferramentas locais (opcional)
+# -----------------------------------------------------------------------------
+.cursor/
+agent-tools/
+agent-transcripts/
+
+# -----------------------------------------------------------------------------
+# Segredos e chaves (nunca versionar)
+# -----------------------------------------------------------------------------
+*.jks
+*.keystore
+google-services.json
+secrets.properties
+.env
+.env.*
