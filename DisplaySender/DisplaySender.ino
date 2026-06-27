@@ -77,14 +77,14 @@ void setup() {
   Serial.println(F("=== DisplayConnect CYD Firmware ==="));
 
   if (!initDisplay()) {
-    Serial.println(F("Falha ao iniciar display."));
+    Serial.println(F("Failed to initialize display."));
     while (true) { delay(1000); }
   }
 
-  showStatusScreen("DisplayConnect", "Iniciando Wi-Fi...");
+  showStatusScreen("DisplayConnect", "Starting Wi-Fi...");
 
   if (!initWiFi()) {
-    showStatusScreen("Erro Wi-Fi", "Reinicie a placa.");
+    showStatusScreen("Wi-Fi Error", "Restart the board.");
     while (true) { delay(1000); }
   }
 
@@ -96,7 +96,7 @@ void setup() {
   webSocket.onEvent(webSocketEvent);
 
   IPAddress addr = WiFi.getMode() == WIFI_AP ? WiFi.softAPIP() : WiFi.localIP();
-  Serial.printf("WebSocket em ws://%d.%d.%d.%d:%d\n",
+  Serial.printf("WebSocket at ws://%d.%d.%d.%d:%d\n",
                 addr[0], addr[1], addr[2], addr[3], WS_PORT);
   showWaitingForAppScreen();
 }
@@ -155,9 +155,9 @@ void showWaitingForAppScreen() {
 
   const IPAddress addr = WiFi.getMode() == WIFI_AP ? WiFi.softAPIP() : WiFi.localIP();
   snprintf(ipLine, sizeof(ipLine), "IP: %d.%d.%d.%d", addr[0], addr[1], addr[2], addr[3]);
-  snprintf(portLine, sizeof(portLine), "Porta: %d", WS_PORT);
+  snprintf(portLine, sizeof(portLine), "Port: %d", WS_PORT);
 
-  showStatusScreen("Aguardando app", ipLine, portLine);
+  showStatusScreen("Waiting for app", ipLine, portLine);
 }
 
 bool tftJpegOutput(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
@@ -177,7 +177,7 @@ bool initWiFi() {
   WiFi.setSleep(false);
 
   if (strlen(WIFI_SSID) > 0) {
-    Serial.printf("Conectando a \"%s\"...\n", WIFI_SSID);
+    Serial.printf("Connecting to \"%s\"...\n", WIFI_SSID);
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -194,23 +194,23 @@ bool initWiFi() {
       return true;
     }
 
-    Serial.println(F("STA falhou, iniciando AP..."));
+    Serial.println(F("STA failed, starting AP..."));
     WiFi.disconnect(true);
     delay(100);
   } else {
-    Serial.println(F("WIFI_SSID vazio — modo AP."));
+    Serial.println(F("WIFI_SSID empty — AP mode."));
   }
 
   WiFi.mode(WIFI_AP);
   const bool apOk = WiFi.softAP(AP_SSID, AP_PASSWORD);
   if (!apOk) {
-    Serial.println(F("Falha ao criar AP."));
+    Serial.println(F("Failed to create AP."));
     return false;
   }
 
   Serial.print(F("Wi-Fi AP: "));
   Serial.println(WiFi.softAPIP());
-  Serial.printf("SSID: %s  Senha: %s\n", AP_SSID, AP_PASSWORD);
+  Serial.printf("SSID: %s  Password: %s\n", AP_SSID, AP_PASSWORD);
   return true;
 }
 
@@ -232,7 +232,7 @@ bool decodeAndDrawJpeg(const uint8_t* data, size_t length) {
 
   const JRESULT result = TJpgDec.drawJpg(0, 0, data, length);
   if (result != JDR_OK) {
-    Serial.printf("Erro JPEG: %d\n", result);
+    Serial.printf("JPEG error: %d\n", result);
     return false;
   }
 
@@ -273,7 +273,7 @@ void processBinaryMessage(uint8_t clientNum, uint8_t* payload, size_t length) {
     }
 
     if (frameSize > JPEG_MAX_SIZE) {
-      Serial.printf("Tamanho inválido: %u\n", frameSize);
+      Serial.printf("Invalid size: %u\n", frameSize);
       awaitingFrameBody = false;
       pendingFrameSize = 0;
       return;
@@ -294,7 +294,7 @@ void processBinaryMessage(uint8_t clientNum, uint8_t* payload, size_t length) {
 
   // Pacote inesperado — resincroniza
   if (awaitingFrameBody) {
-    Serial.printf("Pacote fora de sync: esperado %u, recebido %u\n",
+    Serial.printf("Out-of-sync packet: expected %u, got %u\n",
                   pendingFrameSize, static_cast<unsigned>(length));
     awaitingFrameBody = false;
     pendingFrameSize = 0;
@@ -309,7 +309,7 @@ void updateFpsCounter() {
     lastFpsMillis = now;
 
     if (clientConnected && framesReceived > 0) {
-      Serial.printf("FPS: %.0f  Quadros: %lu\n", currentFps,
+      Serial.printf("FPS: %.0f  Frames: %lu\n", currentFps,
                     static_cast<unsigned long>(framesReceived));
     }
   }
@@ -322,7 +322,7 @@ void updateFpsCounter() {
 void webSocketEvent(const uint8_t& num, const WStype_t& type, uint8_t* payload, const size_t& length) {
   switch (type) {
     case WStype_DISCONNECTED:
-      Serial.printf("[%u] Desconectado\n", num);
+      Serial.printf("[%u] Disconnected\n", num);
       clientConnected = false;
       awaitingFrameBody = false;
       pendingFrameSize = 0;
@@ -332,7 +332,7 @@ void webSocketEvent(const uint8_t& num, const WStype_t& type, uint8_t* payload, 
 
     case WStype_CONNECTED: {
       IPAddress ip = webSocket.remoteIP(num);
-      Serial.printf("[%u] Conectado de %s\n", num, ip.toString().c_str());
+      Serial.printf("[%u] Connected from %s\n", num, ip.toString().c_str());
       clientConnected = true;
       framesReceived = 0;
       fpsCounter = 0;
@@ -349,11 +349,11 @@ void webSocketEvent(const uint8_t& num, const WStype_t& type, uint8_t* payload, 
       break;
 
     case WStype_TEXT:
-      Serial.printf("[%u] Texto: %s\n", num, payload);
+      Serial.printf("[%u] Text: %s\n", num, payload);
       break;
 
     case WStype_ERROR:
-      Serial.printf("[%u] Erro WebSocket\n", num);
+      Serial.printf("[%u] WebSocket error\n", num);
       break;
 
     case WStype_PING:

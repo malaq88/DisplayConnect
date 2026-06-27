@@ -1,40 +1,49 @@
 <resources>
     <string name="app_name">DisplayConnect</string>
-    <string name="settings">Configurações</string>
-    <string name="settings_title">Configurações</string>
+    <string name="settings">Settings</string>
+    <string name="settings_title">Settings</string>
 
-    <string name="esp_ip">IP da ESP32</string>
-    <string name="esp_port">Porta</string>
-    <string name="connect">Conectar</string>
-    <string name="disconnect">Desconectar</string>
-    <string name="open_google_maps">Abrir Google Maps</string>
-    <string name="start_transmission">Iniciar Transmissão</string>
-    <string name="transmission_active">Transmissão ativa — navegue no Google Maps</string>
+    <string name="esp_ip">ESP32 IP</string>
+    <string name="esp_port">Port</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="open_google_maps">Open Google Maps</string>
+    <string name="start_transmission">Start Transmission</string>
+    <string name="transmission_active">Transmission active — navigate in Google Maps</string>
 
-    <string name="stats_title">Estatísticas</string>
+    <string name="stats_title">Statistics</string>
     <string name="stat_fps">FPS</string>
-    <string name="stat_bitrate">Taxa de transmissão</string>
-    <string name="stat_resolution">Resolução</string>
-    <string name="stat_frames">Quadros</string>
+    <string name="stat_bitrate">Transfer rate</string>
+    <string name="stat_resolution">Resolution</string>
+    <string name="stat_frames">Frames</string>
+    <string name="stat_frames_value">%1$d sent / %2$d skipped</string>
 
-    <string name="navigation_section">Navegação</string>
+    <string name="connection_connected">Connected</string>
+    <string name="connection_connecting">Connecting…</string>
+    <string name="connection_reconnecting">Reconnecting…</string>
+    <string name="connection_error">Error</string>
+    <string name="connection_disconnected">Disconnected</string>
+
+    <string name="error_invalid_ip_port">Invalid IP or port</string>
+
+    <string name="navigation_section">Navigation</string>
 
     <string name="setting_fps">FPS: %1$d</string>
-    <string name="setting_jpeg_quality">Qualidade JPEG: %1$d</string>
-    <string name="setting_width">Largura</string>
-    <string name="setting_height">Altura</string>
-    <string name="setting_rotation">Rotação: %1$d°</string>
-    <string name="setting_battery_saver">Modo economia de bateria</string>
-    <string name="setting_battery_saver_desc">Reduz qualidade JPEG durante transmissão</string>
-    <string name="setting_transmit_on_changes">Transmitir somente com mudanças</string>
-    <string name="setting_transmit_on_changes_desc">Ignora quadros sem alteração visível</string>
-    <string name="crop_section">Recorte da captura</string>
-    <string name="setting_crop_top">Recorte superior: %1$.0f%%</string>
-    <string name="setting_crop_bottom">Recorte inferior: %1$.0f%%</string>
-    <string name="setting_diff_threshold">Sensibilidade de mudança: %1$.1f%%</string>
+    <string name="setting_jpeg_quality">JPEG quality: %1$d</string>
+    <string name="setting_width">Width</string>
+    <string name="setting_height">Height</string>
+    <string name="setting_rotation">Rotation: %1$d°</string>
+    <string name="setting_battery_saver">Battery saver mode</string>
+    <string name="setting_battery_saver_desc">Reduces JPEG quality during transmission</string>
+    <string name="setting_transmit_on_changes">Transmit only on changes</string>
+    <string name="setting_transmit_on_changes_desc">Skips frames with no visible change</string>
+    <string name="crop_section">Capture crop</string>
+    <string name="setting_crop_top">Top crop: %1$.0f%%</string>
+    <string name="setting_crop_bottom">Bottom crop: %1$.0f%%</string>
+    <string name="setting_diff_threshold">Change sensitivity: %1$.1f%%</string>
 
-    <string name="notification_channel_name">Captura de tela</string>
-    <string name="notification_title">DisplayConnect ativo</string>
-    <string name="notification_text">Transmitindo navegação para a ESP32</string>
-    <string name="stop_transmission">Parar</string>
+    <string name="notification_channel_name">Screen capture</string>
+    <string name="notification_title">DisplayConnect active</string>
+    <string name="notification_text">Streaming navigation to ESP32</string>
+    <string name="stop_transmission">Stop</string>
 </resources>

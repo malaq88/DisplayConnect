@@ -1,12 +1,12 @@
 #pragma once
 
 // =============================================================================
-// Copie este arquivo para config.h e preencha com seus dados:
+// Copy this file to config.h and fill in your credentials:
 //   cp config.h.example config.h
 // =============================================================================
 
-// Wi-Fi — preencha para conectar à rede do celular.
-// Se vazio, a ESP32 inicia um ponto de acesso em 192.168.4.1
+// Wi-Fi — fill in to connect to your phone's network.
+// If empty, the ESP32 starts an access point at 192.168.4.1
 #define WIFI_SSID ""
 #define WIFI_PASSWORD ""
 
@@ -18,5 +18,5 @@
 #define WIFI_CONNECT_TIMEOUT_MS 15000
 #define JPEG_MAX_SIZE 65536
 
-// Display TFT — configurado em Arduino/libraries/TFT_eSPI/Setup_User.h
-// (CYDAlbumPlayer). User_Setup_Select.h inclui Setup_User.h.
+// TFT display — configured in Arduino/libraries/TFT_eSPI/Setup_User.h
+// (CYDAlbumPlayer). User_Setup_Select.h includes Setup_User.h.

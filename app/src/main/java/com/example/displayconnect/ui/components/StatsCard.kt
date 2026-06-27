@@ -50,7 +50,11 @@ fun StatsCard(
             )
             StatRow(
                 label = stringResource(R.string.stat_frames),
-                value = "${stats.framesSent} enviados / ${stats.framesSkipped} ignorados"
+                value = stringResource(
+                    R.string.stat_frames_value,
+                    stats.framesSent,
+                    stats.framesSkipped
+                )
             )
         }
     }

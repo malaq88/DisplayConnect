@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.displayconnect.DisplayConnectApp
+import com.example.displayconnect.R
 import com.example.displayconnect.models.MainUiState
 import com.example.displayconnect.utils.TransmissionHub
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,7 +60,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val state = _uiState.value
         val port = state.espPort.toIntOrNull()
         if (state.espIp.isBlank() || port == null || port !in 1..65535) {
-            _uiState.update { it.copy(errorMessage = "IP ou porta inválidos") }
+            _uiState.update {
+                it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_invalid_ip_port))
+            }
             return
         }
 

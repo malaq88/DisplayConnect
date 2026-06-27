@@ -13,7 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.displayconnect.R
 import com.example.displayconnect.models.ConnectionState
 
 @Composable
@@ -29,11 +31,11 @@ fun ConnectionIndicator(
     }
 
     val label = when (state) {
-        ConnectionState.CONNECTED -> "Conectado"
-        ConnectionState.CONNECTING -> "Conectando…"
-        ConnectionState.RECONNECTING -> "Reconectando…"
-        ConnectionState.ERROR -> "Erro"
-        ConnectionState.DISCONNECTED -> "Desconectado"
+        ConnectionState.CONNECTED -> stringResource(R.string.connection_connected)
+        ConnectionState.CONNECTING -> stringResource(R.string.connection_connecting)
+        ConnectionState.RECONNECTING -> stringResource(R.string.connection_reconnecting)
+        ConnectionState.ERROR -> stringResource(R.string.connection_error)
+        ConnectionState.DISCONNECTED -> stringResource(R.string.connection_disconnected)
     }
 
     Row(
