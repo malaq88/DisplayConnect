@@ -1,0 +1,40 @@
+<resources>
+    <string name="app_name">DisplayConnect</string>
+    <string name="settings">Configurações</string>
+    <string name="settings_title">Configurações</string>
+
+    <string name="esp_ip">IP da ESP32</string>
+    <string name="esp_port">Porta</string>
+    <string name="connect">Conectar</string>
+    <string name="disconnect">Desconectar</string>
+    <string name="open_google_maps">Abrir Google Maps</string>
+    <string name="start_transmission">Iniciar Transmissão</string>
+    <string name="transmission_active">Transmissão ativa — navegue no Google Maps</string>
+
+    <string name="stats_title">Estatísticas</string>
+    <string name="stat_fps">FPS</string>
+    <string name="stat_bitrate">Taxa de transmissão</string>
+    <string name="stat_resolution">Resolução</string>
+    <string name="stat_frames">Quadros</string>
+
+    <string name="navigation_section">Navegação</string>
+
+    <string name="setting_fps">FPS: %1$d</string>
+    <string name="setting_jpeg_quality">Qualidade JPEG: %1$d</string>
+    <string name="setting_width">Largura</string>
+    <string name="setting_height">Altura</string>
+    <string name="setting_rotation">Rotação: %1$d°</string>
+    <string name="setting_battery_saver">Modo economia de bateria</string>
+    <string name="setting_battery_saver_desc">Reduz qualidade JPEG durante transmissão</string>
+    <string name="setting_transmit_on_changes">Transmitir somente com mudanças</string>
+    <string name="setting_transmit_on_changes_desc">Ignora quadros sem alteração visível</string>
+    <string name="crop_section">Recorte da captura</string>
+    <string name="setting_crop_top">Recorte superior: %1$.0f%%</string>
+    <string name="setting_crop_bottom">Recorte inferior: %1$.0f%%</string>
+    <string name="setting_diff_threshold">Sensibilidade de mudança: %1$.1f%%</string>
+
+    <string name="notification_channel_name">Captura de tela</string>
+    <string name="notification_title">DisplayConnect ativo</string>
+    <string name="notification_text">Transmitindo navegação para a ESP32</string>
+    <string name="stop_transmission">Parar</string>
+</resources>
