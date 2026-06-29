@@ -18,6 +18,7 @@
   "distance_m": 200,
   "street": "Av. Paulista",
   "route": [[120, 80], [125, 90], [130, 100]],
+  "streets": [[10, 20, 50, 40], [100, 30, 140, 60]],
   "user_x": 120,
   "user_y": 150
 }
@@ -26,6 +27,7 @@
 | Field | Description |
 |-------|-------------|
 | `route` | Polyline in **screen pixels** (240×232 map area) |
+| `streets` | Optional nearby road segments `[[x0,y0,x1,y1],...]` drawn as map context (gray) |
 | `user_x`, `user_y` | Current position on map |
 | `bearing` | Heading in degrees (0 = north, clockwise) |
 | `html` | Optional HTML fragment from Maps WebView (max ~480 chars); ESP strips tags and draws text lines |

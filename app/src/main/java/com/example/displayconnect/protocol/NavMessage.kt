@@ -14,6 +14,7 @@ data class NavMessage(
     val distanceM: Int,
     val street: String,
     val routeScreenPoints: List<Pair<Int, Int>>,
+    val streetSegments: List<IntArray> = emptyList(),
     val userScreenPoint: Pair<Int, Int>?,
     val html: String? = null
 ) {
@@ -31,6 +32,17 @@ data class NavMessage(
             .put("distance_m", distanceM)
             .put("street", street)
             .put("route", route)
+        if (streetSegments.isNotEmpty()) {
+            val streets = JSONArray()
+            streetSegments.forEach { seg ->
+                if (seg.size >= 4) {
+                    streets.put(JSONArray().put(seg[0]).put(seg[1]).put(seg[2]).put(seg[3]))
+                }
+            }
+            if (streets.length() > 0) {
+                json.put("streets", streets)
+            }
+        }
         userScreenPoint?.let { (x, y) ->
             json.put("user_x", x).put("user_y", y)
         }

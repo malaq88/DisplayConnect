@@ -14,11 +14,17 @@ class OsrmRouteProvider(
         .build()
 ) {
 
-    suspend fun fetchRoute(origin: LatLon, destination: LatLon): Result<RouteData> =
+    suspend fun fetchRoute(
+        origin: LatLon,
+        destination: LatLon,
+        profile: RouteProfile = RouteProfile.CAR
+    ): Result<RouteData> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val url = buildString {
                     append(BASE_URL)
+                    append(profile.osrmProfile)
+                    append('/')
                     append(origin.lon).append(',').append(origin.lat)
                     append(';')
                     append(destination.lon).append(',').append(destination.lat)
@@ -94,6 +100,6 @@ class OsrmRouteProvider(
     }
 
     companion object {
-        private const val BASE_URL = "https://router.project-osrm.org/route/v1/driving/"
+        private const val BASE_URL = "https://router.project-osrm.org/route/v1/"
     }
 }

@@ -14,6 +14,7 @@ private:
   TFT_eSPI& tft;
 
   void drawRoute(const NavState& state);
+  void drawStreets(const NavState& state);
   void drawUserMarker(int16_t x, int16_t y, float bearingDeg);
   void drawOverlay(const NavState& state);
   void drawArrowIcon(int16_t cx, int16_t cy, float bearingDeg, uint16_t color);

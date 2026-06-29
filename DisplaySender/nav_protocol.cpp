@@ -52,6 +52,7 @@ bool parseNavJson(const char* json, size_t length, NavState& state) {
   }
 
   state.routeCount = 0;
+  state.streetSegmentCount = 0;
   state.hasUserPosition = false;
 
   JsonArray route = doc["route"].as<JsonArray>();
@@ -66,6 +67,23 @@ bool parseNavJson(const char* json, size_t length, NavState& state) {
       state.routeX[state.routeCount] = point[0].as<int16_t>();
       state.routeY[state.routeCount] = point[1].as<int16_t>();
       state.routeCount++;
+    }
+  }
+
+  JsonArray streets = doc["streets"].as<JsonArray>();
+  if (!streets.isNull()) {
+    for (JsonArray segment : streets) {
+      if (state.streetSegmentCount >= NAV_MAX_STREET_SEGMENTS) {
+        break;
+      }
+      if (segment.size() < 4) {
+        continue;
+      }
+      state.streetX0[state.streetSegmentCount] = segment[0].as<int16_t>();
+      state.streetY0[state.streetSegmentCount] = segment[1].as<int16_t>();
+      state.streetX1[state.streetSegmentCount] = segment[2].as<int16_t>();
+      state.streetY1[state.streetSegmentCount] = segment[3].as<int16_t>();
+      state.streetSegmentCount++;
     }
   }
 

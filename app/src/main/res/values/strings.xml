@@ -25,9 +25,22 @@
     <string name="error_not_connected">Connect to the ESP32 first</string>
 
     <string name="navigation_section">Navigation</string>
+    <string name="route_profile_section">Route type</string>
+    <string name="route_profile_car">Car</string>
+    <string name="route_profile_motorcycle">Motorcycle</string>
+    <string name="route_profile_bike">Bike</string>
+    <string name="route_profile_walking">Walking</string>
+    <string name="dest_search">Address or place name</string>
+    <string name="search_place">Search</string>
+    <string name="search_results">Results</string>
+    <string name="dest_selected">Destination: %1$s</string>
+    <string name="dest_coords_section">Coordinates (optional)</string>
     <string name="dest_lat">Destination latitude</string>
     <string name="dest_lon">Destination longitude</string>
-    <string name="dest_hint">Example: -23.5505, -46.6333 (São Paulo). Route via OSRM.</string>
+    <string name="dest_hint">Search by name or enter coordinates manually. Route via OSRM.</string>
+    <string name="error_search_too_short">Enter at least 3 characters to search</string>
+    <string name="error_search_failed">Place search failed</string>
+    <string name="error_place_not_found">No places found</string>
     <string name="start_navigation">Start Navigation (OSRM)</string>
     <string name="start_maps_browser">Open Maps in browser (HTML → CYD)</string>
     <string name="stop_navigation">Stop Navigation</string>

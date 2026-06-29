@@ -7,7 +7,8 @@
  * Protocol (JSON text over WebSocket):
  *   {"type":"heartbeat"}
  *   {"type":"nav","lat":...,"lon":...,"bearing":...,"instruction":"...",
- *    "distance_m":200,"street":"...","route":[[x,y],...],"user_x":120,"user_y":80}
+ *    "distance_m":200,"street":"...","route":[[x,y],...],
+ *    "streets":[[x0,y0,x1,y1],...],"user_x":120,"user_y":80}
  *
  * Libraries:
  *   - TFT_eSPI (Bodmer)

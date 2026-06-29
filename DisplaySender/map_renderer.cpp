@@ -7,11 +7,27 @@
 #endif
 
 static const uint16_t COL_ROUTE = 0x07E0;   // green
+static const uint16_t COL_STREETS = 0x4208; // dark gray (context)
 static const uint16_t COL_USER = 0x5BF7;    // cyan
 static const uint16_t COL_OVERLAY_BG = 0x3186;
 static const uint16_t COL_DIM = 0x7BEF;
+static const uint8_t STREET_LINE_WIDTH = 2;
+static const uint8_t ROUTE_LINE_WIDTH = 3;
 
 MapRenderer::MapRenderer(TFT_eSPI& display) : tft(display) {}
+
+static void drawThickLine(TFT_eSPI& tft, int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+                          uint16_t color, uint8_t width) {
+  if (width <= 1) {
+    tft.drawLine(x0, y0, x1, y1, color);
+    return;
+  }
+  const int8_t half = static_cast<int8_t>(width / 2);
+  for (int8_t offset = -half; offset <= half; offset++) {
+    tft.drawLine(x0 + offset, y0, x1 + offset, y1, color);
+    tft.drawLine(x0, y0 + offset, x1, y1 + offset, color);
+  }
+}
 
 void MapRenderer::clearMapArea() {
   tft.fillRect(0, 0, SCR_W, MAP_AREA_H, TFT_BLACK);
@@ -19,11 +35,22 @@ void MapRenderer::clearMapArea() {
 
 void MapRenderer::draw(const NavState& state) {
   clearMapArea();
+  drawStreets(state);
   drawRoute(state);
   if (state.hasUserPosition) {
     drawUserMarker(state.userX, state.userY, state.bearing);
   }
   drawOverlay(state);
+}
+
+void MapRenderer::drawStreets(const NavState& state) {
+  for (int i = 0; i < state.streetSegmentCount; i++) {
+    const int16_t x0 = state.streetX0[i];
+    const int16_t y0 = state.streetY0[i];
+    const int16_t x1 = state.streetX1[i];
+    const int16_t y1 = state.streetY1[i];
+    drawThickLine(tft, x0, y0, x1, y1, COL_STREETS, STREET_LINE_WIDTH);
+  }
 }
 
 void MapRenderer::drawRoute(const NavState& state) {
@@ -39,7 +66,7 @@ void MapRenderer::drawRoute(const NavState& state) {
     if (x0 < 0 || y0 < 0 || x1 < 0 || y1 < 0) {
       continue;
     }
-    tft.drawLine(x0, y0, x1, y1, COL_ROUTE);
+    drawThickLine(tft, x0, y0, x1, y1, COL_ROUTE, ROUTE_LINE_WIDTH);
   }
 }
 

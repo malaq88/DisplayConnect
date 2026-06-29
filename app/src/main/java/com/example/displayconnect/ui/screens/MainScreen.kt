@@ -1,6 +1,9 @@
 package com.example.displayconnect.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +16,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +34,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -34,12 +44,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.displayconnect.R
 import com.example.displayconnect.models.ConnectionState
+import com.example.displayconnect.routing.RouteProfile
 import com.example.displayconnect.ui.components.ConnectionIndicator
 import com.example.displayconnect.ui.components.StatsCard
 import com.example.displayconnect.ui.navigation.MainTopBar
 import com.example.displayconnect.viewmodel.MainViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainScreen(
     onNavigateToSettings: () -> Unit,
@@ -120,6 +131,94 @@ fun MainScreen(
                 style = MaterialTheme.typography.titleMedium
             )
 
+            Text(
+                text = stringResource(R.string.route_profile_section),
+                style = MaterialTheme.typography.labelLarge
+            )
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                RouteProfile.entries.forEach { profile ->
+                    FilterChip(
+                        selected = uiState.routeProfile == profile,
+                        onClick = { viewModel.updateRouteProfile(profile) },
+                        label = { Text(stringResource(routeProfileLabel(profile))) },
+                        enabled = !uiState.isNavigating,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = uiState.destQuery,
+                onValueChange = viewModel::updateDestQuery,
+                label = { Text(stringResource(R.string.dest_search)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = false,
+                maxLines = 2,
+                enabled = !uiState.isNavigating
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = viewModel::searchDestination,
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isNavigating && !uiState.isSearching
+                ) {
+                    Text(stringResource(R.string.search_place))
+                }
+                if (uiState.isSearching) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                }
+            }
+
+            if (uiState.searchResults.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.search_results),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                uiState.searchResults.forEach { result ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !uiState.isNavigating) {
+                                viewModel.selectSearchResult(result)
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Text(
+                            text = result.displayName,
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            if (uiState.destLabel.isNotBlank()) {
+                Text(
+                    text = stringResource(R.string.dest_selected, uiState.destLabel),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.dest_coords_section),
+                style = MaterialTheme.typography.labelLarge
+            )
+
             OutlinedTextField(
                 value = uiState.destLat,
                 onValueChange = viewModel::updateDestLat,
@@ -184,4 +283,11 @@ fun MainScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+}
+
+private fun routeProfileLabel(profile: RouteProfile): Int = when (profile) {
+    RouteProfile.CAR -> R.string.route_profile_car
+    RouteProfile.MOTORCYCLE -> R.string.route_profile_motorcycle
+    RouteProfile.BIKE -> R.string.route_profile_bike
+    RouteProfile.WALKING -> R.string.route_profile_walking
 }

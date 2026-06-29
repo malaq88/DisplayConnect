@@ -1,11 +1,13 @@
 package com.example.displayconnect.navigation
 
 import com.example.displayconnect.map.MapProjector
+import com.example.displayconnect.map.StreetContextProjector
 import com.example.displayconnect.maps.MapsHtmlHolder
 import com.example.displayconnect.models.AppSettings
 import com.example.displayconnect.network.DisplaySocketClient
 import com.example.displayconnect.protocol.NavMessage
 import com.example.displayconnect.routing.LatLon
+import com.example.displayconnect.routing.OverpassStreetProvider
 import com.example.displayconnect.routing.OsrmRouteProvider
 import com.example.displayconnect.routing.RouteData
 import com.example.displayconnect.routing.RouteStep
@@ -24,6 +26,7 @@ class NavigationEngine(
     private val scope: CoroutineScope,
     private val locationTracker: LocationTracker,
     private val routeProvider: OsrmRouteProvider,
+    private val streetProvider: OverpassStreetProvider = OverpassStreetProvider(),
     private val socketClient: DisplaySocketClient,
     private val settingsProvider: suspend () -> AppSettings
 ) {
@@ -31,6 +34,10 @@ class NavigationEngine(
     private var route: RouteData? = null
     private var destination: LatLon? = null
     private var locationJob: Job? = null
+    private var streetFetchJob: Job? = null
+    private var cachedStreetWays: List<List<LatLon>> = emptyList()
+    private var streetFetchCenter: LatLon? = null
+    private var streetFetchAtMs: Long = 0
     private val statsTracker = StatsTracker()
 
     fun startNavigation(destLat: Double, destLon: Double) {
@@ -48,7 +55,8 @@ class NavigationEngine(
 
             routeProvider.fetchRoute(
                 LatLon(originUpdate.lat, originUpdate.lon),
-                dest
+                dest,
+                settings.routeProfile
             ).onSuccess { route = it }
                 .onFailure { TransmissionHub.setNavigating(false) }
 
@@ -61,6 +69,11 @@ class NavigationEngine(
     fun stopNavigation() {
         locationJob?.cancel()
         locationJob = null
+        streetFetchJob?.cancel()
+        streetFetchJob = null
+        cachedStreetWays = emptyList()
+        streetFetchCenter = null
+        streetFetchAtMs = 0
         route = null
         destination = null
         TransmissionHub.setNavigating(false)
@@ -94,6 +107,14 @@ class NavigationEngine(
             scaleMeters = settings.mapScaleMeters
         )
 
+        maybeRefreshStreetContext(update.lat, update.lon, settings.mapScaleMeters)
+        val streetSegments = StreetContextProjector.projectSegments(
+            centerLat = update.lat,
+            centerLon = update.lon,
+            ways = cachedStreetWays,
+            scaleMeters = settings.mapScaleMeters
+        )
+
         val bearing = if (update.bearing > 0f) {
             update.bearing
         } else {
@@ -108,6 +129,7 @@ class NavigationEngine(
             distanceM = distanceM,
             street = step?.street ?: "",
             routeScreenPoints = screenRoute,
+            streetSegments = streetSegments,
             userScreenPoint = userPoint,
             html = MapsHtmlHolder.get()
         )
@@ -118,6 +140,28 @@ class NavigationEngine(
             TransmissionHub.updateStats(
                 statsTracker.currentStats(settings.resolutionLabel)
             )
+        }
+    }
+
+    private fun maybeRefreshStreetContext(lat: Double, lon: Double, scaleMeters: Double) {
+        val center = streetFetchCenter
+        val movedEnough = center == null ||
+            haversineMeters(lat, lon, center.lat, center.lon) > scaleMeters * 0.35
+        val stale = System.currentTimeMillis() - streetFetchAtMs > 60_000
+        if ((!movedEnough && !stale) || streetFetchJob?.isActive == true) {
+            return
+        }
+
+        streetFetchJob = scope.launch {
+            streetProvider.fetchStreetWays(
+                centerLat = lat,
+                centerLon = lon,
+                radiusMeters = scaleMeters * 1.15
+            ).onSuccess { ways ->
+                cachedStreetWays = ways
+                streetFetchCenter = LatLon(lat, lon)
+                streetFetchAtMs = System.currentTimeMillis()
+            }
         }
     }
 
