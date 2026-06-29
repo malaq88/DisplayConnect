@@ -16,7 +16,9 @@
 #define WS_PORT 81
 
 #define WIFI_CONNECT_TIMEOUT_MS 15000
-#define JPEG_MAX_SIZE 65536
 
 // TFT display — configured in Arduino/libraries/TFT_eSPI/Setup_User.h
 // (CYDAlbumPlayer). User_Setup_Select.h includes Setup_User.h.
+//
+// Arduino libraries required for v2:
+//   - TFT_eSPI, WebSockets_Generic, ArduinoJson (v7+)

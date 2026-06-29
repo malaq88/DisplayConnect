@@ -37,8 +37,8 @@ fun StatsCard(
                 style = MaterialTheme.typography.titleMedium
             )
             StatRow(
-                label = stringResource(R.string.stat_fps),
-                value = String.format("%.1f", stats.fps)
+                label = stringResource(R.string.stat_updates),
+                value = String.format("%.1f/s", stats.updatesPerSecond)
             )
             StatRow(
                 label = stringResource(R.string.stat_bitrate),
@@ -49,12 +49,8 @@ fun StatsCard(
                 value = stats.resolution
             )
             StatRow(
-                label = stringResource(R.string.stat_frames),
-                value = stringResource(
-                    R.string.stat_frames_value,
-                    stats.framesSent,
-                    stats.framesSkipped
-                )
+                label = stringResource(R.string.stat_total_updates),
+                value = stats.totalUpdates.toString()
             )
         }
     }

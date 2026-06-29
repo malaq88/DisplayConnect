@@ -1,6 +1,7 @@
 package com.example.displayconnect.network
 
 import com.example.displayconnect.models.ConnectionState
+import com.example.displayconnect.protocol.NavMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,16 +18,11 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import okio.ByteString
-import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Cliente WebSocket dedicado à comunicação com a ESP32.
- *
- * Formato dos quadros: 4 bytes (tamanho big-endian) + bytes JPEG.
- * Responsável por conexão, reconexão, heartbeat e envio de quadros.
+ * WebSocket client for JSON navigation updates to the ESP32.
  */
 class DisplaySocketClient {
 
@@ -47,11 +43,6 @@ class DisplaySocketClient {
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private val sizeBuffer = ByteBuffer.allocate(4)
-
-    /**
-     * Conecta ao WebSocket da ESP32.
-     */
     fun connect(host: String, port: Int) {
         disconnect(manual = false)
         currentHost = host
@@ -60,9 +51,6 @@ class DisplaySocketClient {
         openSocket()
     }
 
-    /**
-     * Desconecta e impede reconexão automática.
-     */
     fun disconnect(manual: Boolean = true) {
         if (manual) {
             shouldReconnect.set(false)
@@ -74,23 +62,10 @@ class DisplaySocketClient {
         _connectionState.value = ConnectionState.DISCONNECTED
     }
 
-    /**
-     * Envia um quadro JPEG no formato binário especificado.
-     *
-     * @return true se o quadro foi enfileirado para envio.
-     */
-    fun sendFrame(jpegBytes: ByteArray, offset: Int = 0, length: Int = jpegBytes.size): Boolean {
+    fun sendNavMessage(json: String): Boolean {
         val socket = webSocket ?: return false
         if (_connectionState.value != ConnectionState.CONNECTED) return false
-
-        sizeBuffer.clear()
-        sizeBuffer.putInt(length)
-        val header = sizeBuffer.array().copyOf(4)
-
-        val sentHeader = socket.send(ByteString.of(*header))
-        if (!sentHeader) return false
-
-        return socket.send(ByteString.of(*jpegBytes.copyOfRange(offset, offset + length)))
+        return socket.send(json)
     }
 
     fun release() {
@@ -125,7 +100,7 @@ class DisplaySocketClient {
         heartbeatJob = scope.launch {
             while (isActive && _connectionState.value == ConnectionState.CONNECTED) {
                 delay(HEARTBEAT_INTERVAL_SEC * 1000)
-                webSocket?.send(ByteString.of(0, 0, 0, 0))
+                webSocket?.send(NavMessage.heartbeat())
             }
         }
     }
@@ -137,7 +112,7 @@ class DisplaySocketClient {
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-            // ESP32 pode responder com texto de confirmação; ignorado por ora.
+            // ESP may reply with "OK"
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {

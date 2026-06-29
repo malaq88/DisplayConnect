@@ -7,16 +7,12 @@
     <string name="esp_port">Port</string>
     <string name="connect">Connect</string>
     <string name="disconnect">Disconnect</string>
-    <string name="open_google_maps">Open Google Maps</string>
-    <string name="start_transmission">Start Transmission</string>
-    <string name="transmission_active">Transmission active — navigate in Google Maps</string>
 
     <string name="stats_title">Statistics</string>
-    <string name="stat_fps">FPS</string>
+    <string name="stat_updates">Updates</string>
     <string name="stat_bitrate">Transfer rate</string>
-    <string name="stat_resolution">Resolution</string>
-    <string name="stat_frames">Frames</string>
-    <string name="stat_frames_value">%1$d sent / %2$d skipped</string>
+    <string name="stat_resolution">Map area</string>
+    <string name="stat_total_updates">Total updates</string>
 
     <string name="connection_connected">Connected</string>
     <string name="connection_connecting">Connecting…</string>
@@ -25,25 +21,25 @@
     <string name="connection_disconnected">Disconnected</string>
 
     <string name="error_invalid_ip_port">Invalid IP or port</string>
+    <string name="error_invalid_destination">Invalid destination coordinates</string>
+    <string name="error_not_connected">Connect to the ESP32 first</string>
 
     <string name="navigation_section">Navigation</string>
+    <string name="dest_lat">Destination latitude</string>
+    <string name="dest_lon">Destination longitude</string>
+    <string name="dest_hint">Example: -23.5505, -46.6333 (São Paulo). Route via OSRM.</string>
+    <string name="start_navigation">Start Navigation (OSRM)</string>
+    <string name="start_maps_browser">Open Maps in browser (HTML → CYD)</string>
+    <string name="stop_navigation">Stop Navigation</string>
+    <string name="navigation_active">Navigation active — map on CYD display</string>
+    <string name="maps_browser_title">Google Maps</string>
+    <string name="maps_browser_hint">Keep this screen open. Navigation text is sent as HTML to the CYD every 2 seconds.</string>
 
-    <string name="setting_fps">FPS: %1$d</string>
-    <string name="setting_jpeg_quality">JPEG quality: %1$d</string>
-    <string name="setting_width">Width</string>
-    <string name="setting_height">Height</string>
-    <string name="setting_rotation">Rotation: %1$d°</string>
-    <string name="setting_battery_saver">Battery saver mode</string>
-    <string name="setting_battery_saver_desc">Reduces JPEG quality during transmission</string>
-    <string name="setting_transmit_on_changes">Transmit only on changes</string>
-    <string name="setting_transmit_on_changes_desc">Skips frames with no visible change</string>
-    <string name="crop_section">Capture crop</string>
-    <string name="setting_crop_top">Top crop: %1$.0f%%</string>
-    <string name="setting_crop_bottom">Bottom crop: %1$.0f%%</string>
-    <string name="setting_diff_threshold">Change sensitivity: %1$.1f%%</string>
+    <string name="setting_nav_hz">Update rate: %1$d Hz</string>
+    <string name="setting_map_scale">Map radius: %1$d m</string>
+    <string name="setting_map_scale_desc">Visible map area around your position (half-width in meters).</string>
 
-    <string name="notification_channel_name">Screen capture</string>
+    <string name="notification_channel_name">Navigation</string>
     <string name="notification_title">DisplayConnect active</string>
-    <string name="notification_text">Streaming navigation to ESP32</string>
-    <string name="stop_transmission">Stop</string>
+    <string name="notification_nav_text">Sending navigation to ESP32</string>
 </resources>

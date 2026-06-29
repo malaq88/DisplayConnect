@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -42,11 +43,11 @@ import com.example.displayconnect.viewmodel.MainViewModel
 @Composable
 fun MainScreen(
     onNavigateToSettings: () -> Unit,
-    onRequestCapture: () -> Unit,
-    onOpenMaps: () -> Unit,
+    onRequestLocationPermission: () -> Unit,
     viewModel: MainViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val isConnected = uiState.connectionState == ConnectionState.CONNECTED
 
@@ -79,7 +80,7 @@ fun MainScreen(
                 label = { Text(stringResource(R.string.esp_ip)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = !isConnected && !uiState.isTransmitting
+                enabled = !isConnected && !uiState.isNavigating
             )
 
             OutlinedTextField(
@@ -89,7 +90,7 @@ fun MainScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                enabled = !isConnected && !uiState.isTransmitting
+                enabled = !isConnected && !uiState.isNavigating
             )
 
             Row(
@@ -99,14 +100,14 @@ fun MainScreen(
                 Button(
                     onClick = viewModel::connect,
                     modifier = Modifier.weight(1f),
-                    enabled = !isConnected && !uiState.isTransmitting
+                    enabled = !isConnected && !uiState.isNavigating
                 ) {
                     Text(stringResource(R.string.connect))
                 }
                 OutlinedButton(
                     onClick = viewModel::disconnect,
                     modifier = Modifier.weight(1f),
-                    enabled = isConnected || uiState.isTransmitting
+                    enabled = isConnected || uiState.isNavigating
                 ) {
                     Text(stringResource(R.string.disconnect))
                 }
@@ -119,27 +120,62 @@ fun MainScreen(
                 style = MaterialTheme.typography.titleMedium
             )
 
-            OutlinedButton(
-                onClick = onOpenMaps,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.open_google_maps))
-            }
+            OutlinedTextField(
+                value = uiState.destLat,
+                onValueChange = viewModel::updateDestLat,
+                label = { Text(stringResource(R.string.dest_lat)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                enabled = !uiState.isNavigating
+            )
+
+            OutlinedTextField(
+                value = uiState.destLon,
+                onValueChange = viewModel::updateDestLon,
+                label = { Text(stringResource(R.string.dest_lon)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                enabled = !uiState.isNavigating
+            )
+
+            Text(
+                text = stringResource(R.string.dest_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Button(
-                onClick = onRequestCapture,
+                onClick = { viewModel.startNavigation(onRequestLocationPermission) },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = isConnected && !uiState.isTransmitting,
+                enabled = isConnected && !uiState.isNavigating,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.tertiary
                 )
             ) {
-                Text(stringResource(R.string.start_transmission))
+                Text(stringResource(R.string.start_navigation))
             }
 
-            if (uiState.isTransmitting) {
+            OutlinedButton(
+                onClick = {
+                    viewModel.startMapsBrowserNavigation(context, onRequestLocationPermission)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = isConnected && !uiState.isNavigating
+            ) {
+                Text(stringResource(R.string.start_maps_browser))
+            }
+
+            if (uiState.isNavigating) {
+                OutlinedButton(
+                    onClick = viewModel::stopNavigation,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.stop_navigation))
+                }
                 Text(
-                    text = stringResource(R.string.transmission_active),
+                    text = stringResource(R.string.navigation_active),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )

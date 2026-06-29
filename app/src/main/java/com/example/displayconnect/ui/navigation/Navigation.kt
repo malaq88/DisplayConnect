@@ -12,7 +12,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -27,8 +26,7 @@ object Routes {
 
 @Composable
 fun DisplayConnectNavHost(
-    onRequestCapture: () -> Unit,
-    onOpenMaps: () -> Unit,
+    onRequestLocationPermission: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -41,8 +39,7 @@ fun DisplayConnectNavHost(
         composable(Routes.MAIN) {
             MainScreen(
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                onRequestCapture = onRequestCapture,
-                onOpenMaps = onOpenMaps
+                onRequestLocationPermission = onRequestLocationPermission
             )
         }
         composable(Routes.SETTINGS) {

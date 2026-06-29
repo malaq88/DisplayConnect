@@ -4,9 +4,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".DisplayConnectApp"
@@ -32,10 +35,15 @@
             </intent-filter>
         </activity>
 
-        <service
-            android:name=".capture.CaptureForegroundService"
+        <activity
+            android:name=".maps.MapsBrowserActivity"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
+            android:theme="@style/Theme.DisplayConnect" />
+
+        <service
+            android:name=".navigation.NavigationForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
 </manifest>

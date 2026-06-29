@@ -2,46 +2,38 @@ package com.example.displayconnect.utils
 
 import com.example.displayconnect.models.TransmissionStats
 
-/**
- * Calcula FPS e taxa de transmissão com base em janelas deslizantes.
- */
 class StatsTracker {
 
-    private var frameCount = 0
-    private var skippedCount = 0
+    private var updateCount = 0
     private var bytesSent = 0L
     private var windowStartMs = System.currentTimeMillis()
-    private var lastFps = 0f
+    private var lastUpdatesPerSecond = 0f
     private var lastBytesPerSecond = 0L
+    private var totalUpdates = 0L
 
-    fun onFrameSent(byteCount: Int) {
-        frameCount++
+    fun onNavUpdate(byteCount: Int) {
+        updateCount++
+        totalUpdates++
         bytesSent += byteCount
-        maybeRollWindow()
-    }
-
-    fun onFrameSkipped() {
-        skippedCount++
         maybeRollWindow()
     }
 
     fun currentStats(resolution: String): TransmissionStats {
         maybeRollWindow(force = false)
         return TransmissionStats(
-            fps = lastFps,
+            updatesPerSecond = lastUpdatesPerSecond,
             bytesPerSecond = lastBytesPerSecond,
             resolution = resolution,
-            framesSent = frameCount.toLong(),
-            framesSkipped = skippedCount.toLong()
+            totalUpdates = totalUpdates
         )
     }
 
     fun reset() {
-        frameCount = 0
-        skippedCount = 0
+        updateCount = 0
         bytesSent = 0L
+        totalUpdates = 0L
         windowStartMs = System.currentTimeMillis()
-        lastFps = 0f
+        lastUpdatesPerSecond = 0f
         lastBytesPerSecond = 0L
     }
 
@@ -51,11 +43,10 @@ class StatsTracker {
         if (!force && elapsed < WINDOW_MS) return
 
         if (elapsed > 0) {
-            lastFps = frameCount * 1000f / elapsed
+            lastUpdatesPerSecond = updateCount * 1000f / elapsed
             lastBytesPerSecond = bytesSent * 1000L / elapsed
         }
-        frameCount = 0
-        skippedCount = 0
+        updateCount = 0
         bytesSent = 0L
         windowStartMs = now
     }
