@@ -1,24 +1,25 @@
 #pragma once
 
 // =============================================================================
-// Copy this file to config.h and fill in your credentials:
+// Copy this file to config.h:
 //   cp config.h.example config.h
 // =============================================================================
 
-// Wi-Fi — fill in to connect to your phone's network.
-// If empty, the ESP32 starts an access point at 192.168.4.1
-#define WIFI_SSID ""
-#define WIFI_PASSWORD ""
+// BLE device name shown in Android scan results
+#define BLE_DEVICE_NAME "DisplayConnect-CYD"
 
-#define AP_SSID     "DisplayConnect-CYD"
-#define AP_PASSWORD "display123"
+// Nordic UART Service (NUS) UUIDs — must match the Android BleNavClient
+#define NUS_SERVICE_UUID "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+#define NUS_RX_UUID      "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+#define NUS_TX_UUID      "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
-#define WS_PORT 81
-
-#define WIFI_CONNECT_TIMEOUT_MS 15000
+#define BLE_MTU 256
 
 // TFT display — configured in Arduino/libraries/TFT_eSPI/Setup_User.h
-// (CYDAlbumPlayer). User_Setup_Select.h includes Setup_User.h.
 //
-// Arduino libraries required for v2:
-//   - TFT_eSPI, WebSockets_Generic, ArduinoJson (v7+)
+// Arduino libraries required:
+//   - TFT_eSPI
+//   - NimBLE-Arduino (h2zero) v2.x+
+//   - ArduinoJson (v7+)
+//
+// Note: Never draw on the TFT from BLE callbacks (causes CYD reboot).

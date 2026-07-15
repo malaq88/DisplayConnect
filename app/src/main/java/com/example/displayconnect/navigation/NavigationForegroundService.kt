@@ -60,7 +60,7 @@ class NavigationForegroundService : Service() {
             scope = serviceScope,
             locationTracker = LocationTracker(this),
             routeProvider = OsrmRouteProvider(),
-            socketClient = app.socketClient,
+            navClient = app.navClient,
             settingsProvider = { app.settingsRepository.settings.first() }
         )
         navigationEngine = engine

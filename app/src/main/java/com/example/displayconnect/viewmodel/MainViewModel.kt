@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,6 +14,7 @@ import com.example.displayconnect.R
 import com.example.displayconnect.maps.MapsBrowserActivity
 import com.example.displayconnect.models.MainUiState
 import com.example.displayconnect.navigation.NavigationForegroundService
+import com.example.displayconnect.network.BleDeviceItem
 import com.example.displayconnect.routing.NominatimGeocoder
 import com.example.displayconnect.routing.PlaceSearchResult
 import com.example.displayconnect.routing.RouteProfile
@@ -27,11 +29,12 @@ import kotlinx.coroutines.launch
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as DisplayConnectApp
-    private val socketClient = app.socketClient
+    private val navClient = app.navClient
     private val settingsRepository = app.settingsRepository
     private val geocoder = NominatimGeocoder()
 
     private var pendingMapsBrowser = false
+    private var pendingBleAction: (() -> Unit)? = null
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -40,13 +43,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             combine(
                 settingsRepository.settings,
-                socketClient.connectionState,
+                navClient.connectionState,
                 TransmissionHub.isNavigating,
                 TransmissionHub.stats
             ) { settings, connection, navigating, stats ->
                 MainUiState(
-                    espIp = settings.espIp,
-                    espPort = settings.espPort.toString(),
+                    bleDeviceAddress = settings.bleDeviceAddress,
+                    bleDeviceName = settings.bleDeviceName,
                     destQuery = settings.destQuery,
                     destLabel = settings.destLabel,
                     destLat = settings.destLat,
@@ -59,20 +62,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }.collect { fromSettings ->
                 _uiState.update { current ->
                     fromSettings.copy(
+                        scannedDevices = current.scannedDevices,
+                        isScanning = current.isScanning,
                         searchResults = current.searchResults,
                         isSearching = current.isSearching
                     )
                 }
             }
         }
-    }
 
-    fun updateIp(ip: String) {
-        _uiState.update { it.copy(espIp = ip) }
-    }
+        viewModelScope.launch {
+            navClient.scannedDevices.collect { devices ->
+                _uiState.update { it.copy(scannedDevices = devices) }
+            }
+        }
 
-    fun updatePort(port: String) {
-        _uiState.update { it.copy(espPort = port) }
+        viewModelScope.launch {
+            navClient.isScanning.collect { scanning ->
+                _uiState.update { it.copy(isScanning = scanning) }
+            }
+        }
     }
 
     fun updateDestQuery(value: String) {
@@ -115,11 +124,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update { it.copy(searchResults = results, isSearching = false) }
                 }
                 .onFailure { error ->
-                    val app = getApplication<DisplayConnectApp>()
+                    val appCtx = getApplication<DisplayConnectApp>()
                     val message = when (error.message) {
-                        "No places found" -> app.getString(R.string.error_place_not_found)
-                        "Query too short" -> app.getString(R.string.error_search_too_short)
-                        else -> error.message ?: app.getString(R.string.error_search_failed)
+                        "No places found" -> appCtx.getString(R.string.error_place_not_found)
+                        "Query too short" -> appCtx.getString(R.string.error_search_too_short)
+                        else -> error.message ?: appCtx.getString(R.string.error_search_failed)
                     }
                     _uiState.update {
                         it.copy(
@@ -164,25 +173,71 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun connect() {
-        val state = _uiState.value
-        val port = state.espPort.toIntOrNull()
-        if (state.espIp.isBlank() || port == null || port !in 1..65535) {
+    fun startBleScan(onNeedBluetoothPermission: () -> Unit) {
+        runWithBluetoothPermission(onNeedBluetoothPermission) {
+            if (!navClient.isBluetoothEnabled()) {
+                _uiState.update {
+                    it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_bluetooth_disabled))
+                }
+                return@runWithBluetoothPermission
+            }
+            navClient.startScan()
+        }
+    }
+
+    fun stopBleScan() {
+        navClient.stopScan()
+    }
+
+    fun connectToDevice(device: BleDeviceItem, onNeedBluetoothPermission: () -> Unit) {
+        runWithBluetoothPermission(onNeedBluetoothPermission) {
+            viewModelScope.launch {
+                settingsRepository.updateBleDevice(device.address, device.name)
+                _uiState.update {
+                    it.copy(bleDeviceAddress = device.address, bleDeviceName = device.name)
+                }
+                navClient.stopScan()
+                navClient.connect(device.address, device.name)
+            }
+        }
+    }
+
+    fun connectSavedDevice(onNeedBluetoothPermission: () -> Unit) {
+        val address = _uiState.value.bleDeviceAddress
+        if (address.isBlank()) {
             _uiState.update {
-                it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_invalid_ip_port))
+                it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_no_ble_device))
             }
             return
         }
-
-        viewModelScope.launch {
-            settingsRepository.updateEspConnection(state.espIp, port)
-            socketClient.connect(state.espIp, port)
+        runWithBluetoothPermission(onNeedBluetoothPermission) {
+            if (!navClient.isBluetoothEnabled()) {
+                _uiState.update {
+                    it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_bluetooth_disabled))
+                }
+                return@runWithBluetoothPermission
+            }
+            navClient.connect(address, _uiState.value.bleDeviceName)
         }
     }
 
     fun disconnect() {
         stopNavigation()
-        socketClient.disconnect()
+        navClient.disconnect()
+    }
+
+    fun onBluetoothPermissionGranted() {
+        pendingBleAction?.invoke()
+        pendingBleAction = null
+    }
+
+    private fun runWithBluetoothPermission(onNeedPermission: () -> Unit, action: () -> Unit) {
+        if (hasBluetoothPermissions()) {
+            action()
+        } else {
+            pendingBleAction = action
+            onNeedPermission()
+        }
     }
 
     fun startNavigation(onNeedLocationPermission: () -> Unit) {
@@ -255,11 +310,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun hasLocationPermission(): Boolean {
-        val app = getApplication<Application>()
-        return ContextCompat.checkSelfPermission(app, Manifest.permission.ACCESS_FINE_LOCATION) ==
+        val appCtx = getApplication<Application>()
+        return ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(app, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun hasBluetoothPermissions(): Boolean {
+        val appCtx = getApplication<Application>()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(appCtx, Manifest.permission.BLUETOOTH_SCAN) ==
+                PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(appCtx, Manifest.permission.BLUETOOTH_CONNECT) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            hasLocationPermission()
+        }
     }
 
     fun stopNavigation() {

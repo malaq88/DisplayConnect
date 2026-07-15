@@ -4,7 +4,7 @@ import com.example.displayconnect.map.MapProjector
 import com.example.displayconnect.map.StreetContextProjector
 import com.example.displayconnect.maps.MapsHtmlHolder
 import com.example.displayconnect.models.AppSettings
-import com.example.displayconnect.network.DisplaySocketClient
+import com.example.displayconnect.network.BleNavClient
 import com.example.displayconnect.protocol.NavMessage
 import com.example.displayconnect.routing.LatLon
 import com.example.displayconnect.routing.OverpassStreetProvider
@@ -27,7 +27,7 @@ class NavigationEngine(
     private val locationTracker: LocationTracker,
     private val routeProvider: OsrmRouteProvider,
     private val streetProvider: OverpassStreetProvider = OverpassStreetProvider(),
-    private val socketClient: DisplaySocketClient,
+    private val navClient: BleNavClient,
     private val settingsProvider: suspend () -> AppSettings
 ) {
 
@@ -49,6 +49,12 @@ class NavigationEngine(
         locationJob = scope.launch {
             val settings = settingsProvider()
             val intervalMs = (1000L / settings.navUpdateHz.coerceIn(1, 5))
+
+            if (navClient.connectionState.value ==
+                com.example.displayconnect.models.ConnectionState.CONNECTED
+            ) {
+                navClient.sendNavMessage(NavMessage.loading())
+            }
 
             val originUpdate = locationTracker.locationFlow(intervalMs).first()
             val dest = destination ?: return@launch
@@ -82,7 +88,7 @@ class NavigationEngine(
 
     private suspend fun publishUpdate(update: LocationUpdate, settings: AppSettings) {
         val currentRoute = route ?: return
-        if (socketClient.connectionState.value != com.example.displayconnect.models.ConnectionState.CONNECTED) {
+        if (navClient.connectionState.value != com.example.displayconnect.models.ConnectionState.CONNECTED) {
             return
         }
 
@@ -135,7 +141,7 @@ class NavigationEngine(
         )
 
         val json = message.toJson()
-        if (socketClient.sendNavMessage(json)) {
+        if (navClient.sendNavMessage(json)) {
             statsTracker.onNavUpdate(json.toByteArray().size)
             TransmissionHub.updateStats(
                 statsTracker.currentStats(settings.resolutionLabel)

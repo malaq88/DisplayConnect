@@ -19,8 +19,8 @@ class SettingsRepository(private val context: Context) {
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
-            espIp = prefs[Keys.ESP_IP] ?: AppSettings().espIp,
-            espPort = prefs[Keys.ESP_PORT] ?: AppSettings().espPort,
+            bleDeviceAddress = prefs[Keys.BLE_DEVICE_ADDRESS] ?: "",
+            bleDeviceName = prefs[Keys.BLE_DEVICE_NAME] ?: "",
             navUpdateHz = prefs[Keys.NAV_UPDATE_HZ] ?: AppSettings().navUpdateHz,
             mapScaleMeters = prefs[Keys.MAP_SCALE_METERS] ?: AppSettings().mapScaleMeters,
             routeProfile = RouteProfile.fromStorage(prefs[Keys.ROUTE_PROFILE]),
@@ -31,18 +31,18 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
-    suspend fun updateEspConnection(ip: String, port: Int) {
+    suspend fun updateBleDevice(address: String, name: String) {
         context.dataStore.edit { prefs ->
-            prefs[Keys.ESP_IP] = ip
-            prefs[Keys.ESP_PORT] = port
+            prefs[Keys.BLE_DEVICE_ADDRESS] = address
+            prefs[Keys.BLE_DEVICE_NAME] = name
         }
     }
 
     suspend fun updateSettings(transform: (AppSettings) -> AppSettings) {
         context.dataStore.edit { prefs ->
             val current = AppSettings(
-                espIp = prefs[Keys.ESP_IP] ?: AppSettings().espIp,
-                espPort = prefs[Keys.ESP_PORT] ?: AppSettings().espPort,
+                bleDeviceAddress = prefs[Keys.BLE_DEVICE_ADDRESS] ?: "",
+                bleDeviceName = prefs[Keys.BLE_DEVICE_NAME] ?: "",
                 navUpdateHz = prefs[Keys.NAV_UPDATE_HZ] ?: AppSettings().navUpdateHz,
                 mapScaleMeters = prefs[Keys.MAP_SCALE_METERS] ?: AppSettings().mapScaleMeters,
                 routeProfile = RouteProfile.fromStorage(prefs[Keys.ROUTE_PROFILE]),
@@ -52,8 +52,8 @@ class SettingsRepository(private val context: Context) {
                 destLon = prefs[Keys.DEST_LON] ?: ""
             )
             val updated = transform(current)
-            prefs[Keys.ESP_IP] = updated.espIp
-            prefs[Keys.ESP_PORT] = updated.espPort
+            prefs[Keys.BLE_DEVICE_ADDRESS] = updated.bleDeviceAddress
+            prefs[Keys.BLE_DEVICE_NAME] = updated.bleDeviceName
             prefs[Keys.NAV_UPDATE_HZ] = updated.navUpdateHz
             prefs[Keys.MAP_SCALE_METERS] = updated.mapScaleMeters
             prefs[Keys.ROUTE_PROFILE] = updated.routeProfile.storageKey
@@ -65,8 +65,8 @@ class SettingsRepository(private val context: Context) {
     }
 
     private object Keys {
-        val ESP_IP = stringPreferencesKey("esp_ip")
-        val ESP_PORT = intPreferencesKey("esp_port")
+        val BLE_DEVICE_ADDRESS = stringPreferencesKey("ble_device_address")
+        val BLE_DEVICE_NAME = stringPreferencesKey("ble_device_name")
         val NAV_UPDATE_HZ = intPreferencesKey("nav_update_hz")
         val MAP_SCALE_METERS = doublePreferencesKey("map_scale_meters")
         val ROUTE_PROFILE = stringPreferencesKey("route_profile")

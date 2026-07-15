@@ -32,6 +32,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            grants[Manifest.permission.BLUETOOTH_SCAN] == true &&
+                grants[Manifest.permission.BLUETOOTH_CONNECT] == true
+        } else {
+            grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        }
+        if (granted) {
+            mainViewModel.onBluetoothPermissionGranted()
+        }
+    }
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* continue even if denied */ }
@@ -46,6 +61,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     DisplayConnectNavHost(
                         onRequestLocationPermission = ::requestLocationPermission,
+                        onRequestBluetoothPermission = ::requestBluetoothPermission,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -60,6 +76,21 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             )
         )
+    }
+
+    private fun requestBluetoothPermission() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        }
+        bluetoothPermissionLauncher.launch(permissions)
     }
 
     private fun requestNotificationPermissionIfNeeded() {

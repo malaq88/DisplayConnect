@@ -2,15 +2,16 @@ package com.example.displayconnect.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -34,7 +35,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +55,7 @@ import com.example.displayconnect.viewmodel.MainViewModel
 fun MainScreen(
     onNavigateToSettings: () -> Unit,
     onRequestLocationPermission: () -> Unit,
+    onRequestBluetoothPermission: () -> Unit,
     viewModel: MainViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -85,33 +86,87 @@ fun MainScreen(
 
             ConnectionIndicator(state = uiState.connectionState)
 
-            OutlinedTextField(
-                value = uiState.espIp,
-                onValueChange = viewModel::updateIp,
-                label = { Text(stringResource(R.string.esp_ip)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = !isConnected && !uiState.isNavigating
+            Text(
+                text = stringResource(R.string.ble_section),
+                style = MaterialTheme.typography.titleMedium
             )
 
-            OutlinedTextField(
-                value = uiState.espPort,
-                onValueChange = viewModel::updatePort,
-                label = { Text(stringResource(R.string.esp_port)) },
+            if (uiState.bleDeviceName.isNotBlank() || uiState.bleDeviceAddress.isNotBlank()) {
+                Text(
+                    text = stringResource(
+                        R.string.ble_saved_device,
+                        uiState.bleDeviceName.ifBlank { uiState.bleDeviceAddress }
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                enabled = !isConnected && !uiState.isNavigating
-            )
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = {
+                        if (uiState.isScanning) {
+                            viewModel.stopBleScan()
+                        } else {
+                            viewModel.startBleScan(onRequestBluetoothPermission)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isConnected && !uiState.isNavigating
+                ) {
+                    Text(
+                        stringResource(
+                            if (uiState.isScanning) R.string.ble_stop_scan else R.string.ble_scan
+                        )
+                    )
+                }
+                if (uiState.isScanning) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                }
+            }
+
+            if (uiState.scannedDevices.isNotEmpty() && !isConnected) {
+                Text(
+                    text = stringResource(R.string.ble_devices),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                uiState.scannedDevices.forEach { device ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !uiState.isNavigating) {
+                                viewModel.connectToDevice(device, onRequestBluetoothPermission)
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(device.name, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = "${device.address}  ·  ${device.rssi} dBm",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = viewModel::connect,
+                    onClick = { viewModel.connectSavedDevice(onRequestBluetoothPermission) },
                     modifier = Modifier.weight(1f),
-                    enabled = !isConnected && !uiState.isNavigating
+                    enabled = !isConnected &&
+                        !uiState.isNavigating &&
+                        uiState.bleDeviceAddress.isNotBlank()
                 ) {
                     Text(stringResource(R.string.connect))
                 }

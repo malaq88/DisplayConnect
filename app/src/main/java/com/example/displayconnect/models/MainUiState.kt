@@ -1,11 +1,14 @@
 package com.example.displayconnect.models
 
+import com.example.displayconnect.network.BleDeviceItem
 import com.example.displayconnect.routing.PlaceSearchResult
 import com.example.displayconnect.routing.RouteProfile
 
 data class MainUiState(
-    val espIp: String = "192.168.4.1",
-    val espPort: String = "81",
+    val bleDeviceAddress: String = "",
+    val bleDeviceName: String = "",
+    val scannedDevices: List<BleDeviceItem> = emptyList(),
+    val isScanning: Boolean = false,
     val destQuery: String = "",
     val destLabel: String = "",
     val destLat: String = "",

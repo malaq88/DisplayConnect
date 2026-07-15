@@ -27,6 +27,7 @@ object Routes {
 @Composable
 fun DisplayConnectNavHost(
     onRequestLocationPermission: () -> Unit,
+    onRequestBluetoothPermission: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -39,7 +40,8 @@ fun DisplayConnectNavHost(
         composable(Routes.MAIN) {
             MainScreen(
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                onRequestLocationPermission = onRequestLocationPermission
+                onRequestLocationPermission = onRequestLocationPermission,
+                onRequestBluetoothPermission = onRequestBluetoothPermission
             )
         }
         composable(Routes.SETTINGS) {

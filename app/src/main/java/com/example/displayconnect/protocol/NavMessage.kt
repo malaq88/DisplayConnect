@@ -54,5 +54,7 @@ data class NavMessage(
 
     companion object {
         fun heartbeat(): String = """{"type":"heartbeat"}"""
+
+        fun loading(): String = """{"type":"loading"}"""
     }
 }

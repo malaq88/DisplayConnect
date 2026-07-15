@@ -5,6 +5,11 @@
 
     <string name="esp_ip">ESP32 IP</string>
     <string name="esp_port">Port</string>
+    <string name="ble_section">Bluetooth (CYD)</string>
+    <string name="ble_scan">Scan devices</string>
+    <string name="ble_stop_scan">Stop scan</string>
+    <string name="ble_devices">Nearby devices</string>
+    <string name="ble_saved_device">Saved: %1$s</string>
     <string name="connect">Connect</string>
     <string name="disconnect">Disconnect</string>
 
@@ -21,6 +26,8 @@
     <string name="connection_disconnected">Disconnected</string>
 
     <string name="error_invalid_ip_port">Invalid IP or port</string>
+    <string name="error_no_ble_device">Scan and select a CYD device first</string>
+    <string name="error_bluetooth_disabled">Turn on Bluetooth and try again</string>
     <string name="error_invalid_destination">Invalid destination coordinates</string>
     <string name="error_not_connected">Connect to the ESP32 first</string>
 

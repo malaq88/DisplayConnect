@@ -14,6 +14,15 @@ static void copyTruncated(char* dest, size_t destSize, const char* src) {
   dest[destSize - 1] = '\0';
 }
 
+bool isLoadingJson(const char* json, size_t length) {
+  if (json == nullptr || length < 10) {
+    return false;
+  }
+  // Fast path — avoid allocating JsonDocument on every small frame
+  return strstr(json, "\"type\":\"loading\"") != nullptr ||
+         strstr(json, "\"type\": \"loading\"") != nullptr;
+}
+
 bool parseNavJson(const char* json, size_t length, NavState& state) {
   if (json == nullptr || length == 0) {
     return false;
@@ -28,6 +37,9 @@ bool parseNavJson(const char* json, size_t length, NavState& state) {
 
   const char* type = doc["type"] | "";
   if (strcmp(type, "heartbeat") == 0) {
+    return false;
+  }
+  if (strcmp(type, "loading") == 0) {
     return false;
   }
   if (strcmp(type, "nav") != 0) {
