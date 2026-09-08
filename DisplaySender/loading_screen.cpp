@@ -1,17 +1,12 @@
 #include "loading_screen.h"
 #include "nav_types.h"
+#include "maps_theme.h"
 
 #include <math.h>
 
 #ifndef DEG_TO_RAD
 #define DEG_TO_RAD 0.01745329251f
 #endif
-
-static const uint16_t COL_MAP_BG = 0x2945;
-static const uint16_t COL_OVERLAY_BG = 0x3186;
-static const uint16_t COL_SPINNER = 0x5BF7;
-static const uint16_t COL_SPINNER_DIM = 0x3186;
-static const uint16_t COL_TEXT_DIM = 0x7BEF;
 
 static const int16_t SPINNER_CX = SCR_W / 2;
 static const int16_t SPINNER_CY = MAP_AREA_H / 2;
@@ -26,7 +21,7 @@ static void drawSpinnerAt(TFT_eSPI& tft, uint8_t activeDot) {
     const int16_t x = SPINNER_CX + static_cast<int16_t>(cosf(angle) * SPINNER_R);
     const int16_t y = SPINNER_CY + static_cast<int16_t>(sinf(angle) * SPINNER_R);
     const uint8_t radius = (i == activeDot) ? 4 : 3;
-    const uint16_t color = (i == activeDot) ? COL_SPINNER : COL_SPINNER_DIM;
+    const uint16_t color = (i == activeDot) ? mapsColRoute() : mapsColMuted();
     tft.fillCircle(x, y, radius, color);
   }
 }
@@ -34,14 +29,21 @@ static void drawSpinnerAt(TFT_eSPI& tft, uint8_t activeDot) {
 void showMapLoadingScreen(TFT_eSPI& tft) {
   s_lastSpinnerFrame = 255;
 
-  tft.fillRect(0, 0, SCR_W, MAP_AREA_H, COL_MAP_BG);
+  tft.fillRect(0, 0, SCR_W, MAP_AREA_H, mapsColLand());
+  if (!mapsThemeIsDark()) {
+    tft.fillCircle(40, 70, 36, mapsColPark());
+    tft.fillCircle(SCR_W - 40, 140, 40, mapsColPark());
+  }
 
-  tft.fillRect(0, MAP_AREA_H, SCR_W, OVERLAY_H, COL_OVERLAY_BG);
+  tft.fillRect(0, MAP_AREA_H - 3, SCR_W, 3, mapsColCardShadow());
+  tft.fillRect(0, MAP_AREA_H, SCR_W, OVERLAY_H, mapsColCard());
+  tft.fillRoundRect(SCR_W / 2 - 14, MAP_AREA_H + 6, 28, 3, 1, mapsColMuted());
+
   tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(TFT_WHITE, COL_OVERLAY_BG);
-  tft.drawString(F("Loading map..."), SCR_W / 2, MAP_AREA_H + 28, 2);
-  tft.setTextColor(COL_TEXT_DIM, COL_OVERLAY_BG);
-  tft.drawString(F("Waiting for route data"), SCR_W / 2, MAP_AREA_H + 52, 2);
+  tft.setTextColor(mapsColText(), mapsColCard());
+  tft.drawString(F("Getting directions..."), SCR_W / 2, MAP_AREA_H + 28, 2);
+  tft.setTextColor(mapsColMuted(), mapsColCard());
+  tft.drawString(F("Loading map data"), SCR_W / 2, MAP_AREA_H + 52, 2);
 
   drawSpinnerAt(tft, 0);
 }
@@ -58,7 +60,7 @@ void updateMapLoadingAnimation(TFT_eSPI& tft, uint32_t nowMs) {
     SPINNER_CY - SPINNER_R - 8,
     (SPINNER_R + 8) * 2,
     (SPINNER_R + 8) * 2,
-    COL_MAP_BG
+    mapsColLand()
   );
   drawSpinnerAt(tft, frame);
 }

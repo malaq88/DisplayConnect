@@ -24,6 +24,8 @@
 #include "map_renderer.h"
 #include "nav_protocol.h"
 #include "loading_screen.h"
+#include "maps_theme.h"
+#include "touch_cyd.h"
 
 TFT_eSPI tft;
 MapRenderer mapRenderer(tft);
@@ -38,6 +40,12 @@ static uint32_t navUpdatesReceived = 0;
 static uint32_t lastStatsMillis = 0;
 static uint16_t updatesPerSecond = 0;
 
+static NavState lastNav;
+static bool hasNav = false;
+static bool showingWaiting = true;
+static bool touchWasDown = false;
+static uint32_t lastThemeToggleMs = 0;
+
 static const size_t LINE_BUF_SIZE = 3072;
 static char lineBuf[LINE_BUF_SIZE];
 static size_t lineLen = 0;
@@ -51,11 +59,6 @@ static volatile size_t rxTail = 0;
 static NimBLEServer* bleServer = nullptr;
 static NimBLECharacteristic* txCharacteristic = nullptr;
 
-#define COL_BTN      tft.color565(30, 30, 30)
-
-static inline uint16_t colInfoCyan() { return tft.color565(88, 190, 245); }
-static inline uint16_t colDim() { return tft.color565(120, 120, 120); }
-
 bool initDisplay();
 bool initBle();
 void showStatusScreen(const char* title, const char* line2 = nullptr, const char* line3 = nullptr);
@@ -65,6 +68,8 @@ void drainRxQueue();
 void appendRxByte(char c);
 void updateStatsCounter();
 void handleUiFlags();
+void pollThemeSwitch();
+void redrawAfterThemeChange();
 
 static bool rxQueuePush(uint8_t b) {
   const size_t next = (rxHead + 1) % RX_QUEUE_SIZE;
@@ -93,6 +98,8 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     updatesPerSecond = 0;
     lastStatsMillis = millis();
     lineLen = 0;
+    hasNav = false;
+    showingWaiting = false;
     uiShowLoading = true;
     sendOkPending = true;
     // Do NOT draw TFT or notify heavily here — defer to loop()
@@ -103,6 +110,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     awaitingFirstNav = false;
     navUpdatesReceived = 0;
     lineLen = 0;
+    hasNav = false;
     rxHead = 0;
     rxTail = 0;
     uiShowWaiting = true;
@@ -129,9 +137,15 @@ void setup() {
   Serial.println();
   Serial.println(F("=== DisplayConnect CYD v2 (BLE) ==="));
 
+  mapsThemeInit();
+
   if (!initDisplay()) {
     Serial.println(F("Failed to initialize display."));
     while (true) { delay(1000); }
+  }
+
+  if (!touchInit()) {
+    Serial.println(F("Touch init failed — theme switch disabled"));
   }
 
   showStatusScreen("DisplayConnect", "Starting BLE...");
@@ -142,11 +156,13 @@ void setup() {
   }
 
   showWaitingForAppScreen();
+  showingWaiting = true;
 }
 
 void loop() {
   handleUiFlags();
   drainRxQueue();
+  pollThemeSwitch();
 
   if (clientConnected && awaitingFirstNav) {
     updateMapLoadingAnimation(tft, millis());
@@ -159,11 +175,13 @@ void loop() {
 void handleUiFlags() {
   if (uiShowLoading) {
     uiShowLoading = false;
+    showingWaiting = false;
     showMapLoadingScreen(tft);
   }
 
   if (uiShowWaiting) {
     uiShowWaiting = false;
+    showingWaiting = true;
     showWaitingForAppScreen();
     if (bleServer != nullptr) {
       bleServer->startAdvertising();
@@ -175,6 +193,38 @@ void handleUiFlags() {
     txCharacteristic->setValue("OK\n");
     txCharacteristic->notify();
   }
+}
+
+void redrawAfterThemeChange() {
+  if (hasNav && clientConnected) {
+    mapRenderer.draw(lastNav);
+    showingWaiting = false;
+  } else if (clientConnected && awaitingFirstNav) {
+    showMapLoadingScreen(tft);
+    showingWaiting = false;
+  } else {
+    showWaitingForAppScreen();
+    showingWaiting = true;
+  }
+}
+
+void pollThemeSwitch() {
+  uint16_t x = 0;
+  uint16_t y = 0;
+  const bool down = touchRead(x, y);
+  const uint32_t now = millis();
+
+  if (down && !touchWasDown) {
+    const bool hit = MapRenderer::themeSwitchHit(x, y);
+    Serial.printf("tap %u,%u hit=%d\n", x, y, hit ? 1 : 0);
+    if (hit && (now - lastThemeToggleMs) > 350) {
+      const bool dark = mapsThemeToggle();
+      lastThemeToggleMs = now;
+      Serial.printf("theme -> %s\n", dark ? "dark" : "light");
+      redrawAfterThemeChange();
+    }
+  }
+  touchWasDown = down;
 }
 
 bool initDisplay() {
@@ -189,7 +239,7 @@ bool initDisplay() {
   tft.writedata(1);
 
   tft.setRotation(0);
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(mapsColLand());
   return true;
 }
 
@@ -226,28 +276,37 @@ bool initBle() {
 }
 
 void showStatusScreen(const char* title, const char* line2, const char* line3) {
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(mapsColLand());
+  if (!mapsThemeIsDark()) {
+    tft.fillCircle(SCR_W - 30, 90, 36, mapsColPark());
+  }
   tft.setTextDatum(MC_DATUM);
 
-  tft.fillRect(0, 0, SCR_W, 36, COL_BTN);
-  tft.setTextColor(TFT_WHITE, COL_BTN);
+  tft.fillRect(0, 0, SCR_W, 36, mapsColCard());
+  tft.fillRect(0, 36, SCR_W, 2, mapsColCardShadow());
+  tft.setTextColor(mapsColText(), mapsColCard());
   tft.drawString(title, SCR_W / 2, 18, 2);
 
+  tft.fillRoundRect(16, 100, SCR_W - 32, 80, 8, mapsColCard());
+  tft.fillRect(16, 100, SCR_W - 32, 3, mapsColRoute());
+
   if (line2 != nullptr) {
-    tft.setTextColor(colInfoCyan(), TFT_BLACK);
-    tft.drawString(line2, SCR_W / 2, 120, 2);
+    tft.setTextColor(mapsColAccent(), mapsColCard());
+    tft.drawString(line2, SCR_W / 2, 128, 2);
   }
   if (line3 != nullptr) {
-    tft.setTextColor(colDim(), TFT_BLACK);
-    tft.drawString(line3, SCR_W / 2, 150, 2);
+    tft.setTextColor(mapsColMuted(), mapsColCard());
+    tft.drawString(line3, SCR_W / 2, 156, 2);
   }
 
-  tft.setTextColor(colDim(), TFT_BLACK);
-  tft.drawString(F("DisplayConnect v2 BLE"), SCR_W / 2, SCR_H - 20, 2);
+  mapRenderer.drawThemeSwitchWaiting();
+
+  tft.setTextColor(mapsColMuted(), mapsColLand());
+  tft.drawString(F("Toque: claro / escuro"), SCR_W / 2, SCR_H - 16, 1);
 }
 
 void showWaitingForAppScreen() {
-  showStatusScreen("Waiting for app", "Bluetooth LE", BLE_DEVICE_NAME);
+  showStatusScreen("Ready to navigate", "Bluetooth LE", BLE_DEVICE_NAME);
 }
 
 void appendRxByte(char c) {
@@ -281,6 +340,8 @@ void drainRxQueue() {
 void processTextMessage(const char* payload, size_t length) {
   if (isLoadingJson(payload, length)) {
     awaitingFirstNav = true;
+    hasNav = false;
+    showingWaiting = false;
     showMapLoadingScreen(tft);
     return;
   }
@@ -290,7 +351,10 @@ void processTextMessage(const char* payload, size_t length) {
     return;
   }
 
-  mapRenderer.draw(state);
+  lastNav = state;
+  hasNav = true;
+  showingWaiting = false;
+  mapRenderer.draw(lastNav);
   awaitingFirstNav = false;
   navUpdatesReceived++;
   updatesPerSecond++;
