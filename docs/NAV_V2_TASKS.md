@@ -93,6 +93,17 @@ Objetivo: substituir espelhamento JPEG por **navegação via JSON** com **mapa d
 
 ---
 
+## Fase 9 — UI Maps + tema claro/escuro (CYD)
+
+- [x] **9.1** Paleta estilo Google Maps (land, parks, road casing, rota azul, puck)
+- [x] **9.2** Bottom sheet de manobra + loading/status no mesmo visual
+- [x] **9.3** Switch touch L/D (XPT2046) na tela de espera e no overlay
+- [x] **9.4** Preferência de tema persistida em NVS (`Preferences` / `ui` / `theme`)
+- [x] **9.5** Otimização de `drawThickLine` (eixo dominante) + hit-zone generosa
+- [x] **9.6** Documentação (`README`, `README.pt-BR`, `PROTOCOL_V2`) alinhada
+
+---
+
 ## Fase 6 — Opcional: mapa com tiles OSM na ESP
 
 - [ ] **6.1** Android envia `zoom` + bbox ou tile indices
@@ -118,7 +129,7 @@ Objetivo: substituir espelhamento JPEG por **navegação via JSON** com **mapa d
 ## Ordem recomendada (próximos passos)
 
 ```
-Concluído: Fase 0–5 + Fase 8
+Concluído: Fase 0–5 + Fase 8 + Fase 9
 Pendente útil: 3.8 (reroute), 4.3 (ícones), 4.6 (notificação rica)
 Opcional: Fase 6 ou 7
 ```

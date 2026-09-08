@@ -23,7 +23,7 @@ Starting with **version 2.0**, DisplayConnect **stopped replicating the phone sc
 
 **v2.0 introduced:** JSON protocol, vector map on the CYD, OSRM routing, and optional Google Maps browser mode (HTML text snippet only — not full screen mirroring).
 
-**After v2.0** (`master` today): place search (Nominatim), route profiles (car / motorcycle / bike / walking), nearby street context (Overpass), thicker map lines, and **BLE transport** (replacing Wi‑Fi WebSocket to the CYD).
+**After v2.0** (`master` today): place search (Nominatim), route profiles (car / motorcycle / bike / walking), nearby street context (Overpass), **BLE transport** (replacing Wi‑Fi WebSocket to the CYD), and a **Maps-style light/dark UI** on the CYD with an on-screen theme switch.
 
 The v1.0 JPEG mirroring code remains in git tag `v1.0` for reference; it is **not** the active flow on `master`.
 
@@ -38,7 +38,7 @@ The v1.0 JPEG mirroring code remains in git tag `v1.0` for reference; it is **no
 | Touch interaction while riding is unsafe | Glance at the CYD; set destination before you start |
 | Dedicated bike GPS units are expensive | ESP32-2432S028 boards cost a few dollars |
 
-The **ESP32-2432S028** (CYD) combines ESP32, 240×320 ILI9341 TFT, and touch. The map area is **240×232 pixels**; the bottom strip shows maneuver text.
+The **ESP32-2432S028** (CYD) combines ESP32, 240×320 ILI9341 TFT, and resistive touch (XPT2046). The map area is **240×232 pixels**; the bottom strip shows maneuver text and a **light/dark theme switch**.
 
 ---
 
@@ -64,9 +64,24 @@ The phone is the **brain**; the CYD is the **display**. No Google Maps SDK or AP
 │                        ESP32 CYD                                │
 │  NimBLE NUS server                                              │
 │  ArduinoJson parse → NavState                                   │
-│  MapRenderer (TFT_eSPI): streets → route → user marker → text │
+│  MapRenderer (TFT_eSPI): streets → route → puck → bottom sheet  │
+│  Touch (XPT2046): light / dark theme toggle (saved in NVS)      │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Display UI (CYD)
+
+The firmware draws a **Google Maps–inspired** vector map locally (theme is **not** part of the BLE JSON):
+
+| Element | Light theme (default) | Dark theme |
+|---------|----------------------|------------|
+| Land / parks | Near-white land, soft green parks | Elevated charcoal land |
+| Roads | Light gray casing + white fill | Gray casing / fill |
+| Route | Blue polyline with white edge | Same blue route accent |
+| User | Blue puck + heading arrow | Same |
+| Overlay | White bottom sheet + blue distance | Dark card + light text |
+
+Tap the **L/D switch** (bottom-right on the waiting screen, or right side of the nav bottom sheet) to toggle. Preference is stored in NVS (`Preferences` namespace `ui` / key `theme`) and survives reboot.
 
 ### Update loop (1–5 Hz, configurable)
 
@@ -79,7 +94,7 @@ The phone is the **brain**; the CYD is the **display**. No Google Maps SDK or AP
    - Optionally loads nearby OSM streets (Overpass, cached while you ride)
    - Projects route, streets, and position to **screen coordinates**
    - Sends a JSON `nav` message over **BLE**
-6. The CYD parses JSON and redraws the map (gray street context, green route, cyan position arrow, maneuver overlay).
+6. The CYD parses JSON and redraws the map (street casing, blue route, position puck, maneuver bottom sheet).
 
 Optional: **Open Maps in browser** mode keeps a WebView open, extracts navigation text as a small HTML snippet, and includes it in each JSON message. The map polyline still comes from GPS + OSRM on the phone.
 
@@ -119,12 +134,14 @@ Full protocol details: [docs/PROTOCOL_V2.md](docs/PROTOCOL_V2.md)
 
 ### ESP32 CYD firmware (Arduino)
 
-- **ESP32-2432S028** (CYD) -> BLE + 240×320 TFT
+- **ESP32-2432S028** (CYD) -> BLE + 240×320 TFT + XPT2046 touch
 - **TFT_eSPI** -> ILI9341 driver; draws lines, circles, and text
 - **NimBLE-Arduino** (h2zero) **v2.x** -> BLE GATT UART (NUS) server
 - **ArduinoJson** v7+ -> JSON parsing (on the main `loop()` task only)
+- **XPT2046_Touchscreen** -> resistive touch for the theme switch
+- **Preferences** (ESP32 core) -> persist light/dark theme in NVS
 
-**Firmware modules:** `nav_protocol.cpp`, `map_renderer.cpp`, `html_renderer.cpp`, `loading_screen.cpp`.
+**Firmware modules:** `nav_protocol.cpp`, `map_renderer.cpp`, `html_renderer.cpp`, `loading_screen.cpp`, `maps_theme.cpp`, `touch_cyd.cpp`.
 
 The CYD does **not** need Wi‑Fi for navigation display. It only draws vectors and text from BLE JSON.
 
@@ -162,11 +179,14 @@ DisplayConnect/
 │       ├── viewmodel/                  # MainViewModel, SettingsViewModel
 │       ├── models/                     # AppSettings, ConnectionState, stats
 │       └── utils/                      # TransmissionHub, StatsTracker
-├── DisplaySender/                    # ESP32 firmware
+├── DisplaySender/                    # ESP32 CYD firmware (Arduino)
 │   ├── DisplaySender.ino
-│   ├── map_renderer.cpp / .h
+│   ├── map_renderer.cpp / .h           # Maps-style vector map + theme switch
+│   ├── maps_theme.cpp / .h             # Light/dark palette + NVS
+│   ├── touch_cyd.cpp / .h              # XPT2046 touch (theme toggle)
 │   ├── nav_protocol.cpp / .h
 │   ├── html_renderer.cpp / .h
+│   ├── loading_screen.cpp / .h
 │   └── config.h.example
 ├── docs/
 │   ├── PROTOCOL_V2.md                  # JSON protocol reference
@@ -193,10 +213,10 @@ Legacy JPEG capture code may still exist under `app/.../capture/` from v1 but is
 
 ### 1. Flash the ESP32
 
-1. Install Arduino libraries: **TFT_eSPI**, **NimBLE-Arduino** (v2.x), **ArduinoJson** v7+.
+1. Install Arduino libraries: **TFT_eSPI**, **NimBLE-Arduino** (v2.x), **ArduinoJson** v7+, **XPT2046_Touchscreen**.
 2. Copy `DisplaySender/config.h.example` to `DisplaySender/config.h`.
 3. Upload `DisplaySender.ino`.
-4. On boot, the CYD shows **Waiting for app** / **Bluetooth LE** / `DisplayConnect-CYD`.
+4. On boot, the CYD shows **Ready to navigate** / **Bluetooth LE** / `DisplayConnect-CYD`, with a theme switch at the bottom-right.
 
 ### 2. Build and install the Android app
 
@@ -246,7 +266,7 @@ If the CYD reboots when connecting, make sure you have the current firmware: TFT
 |-----|-------------|
 | **v1.0** | **Screen mirroring** — MediaProjection + JPEG over binary WebSocket |
 | **v2.0** | **JSON navigation** — OSRM vector map; initially over Wi‑Fi WebSocket. See [docs/PROTOCOL_V2.md](docs/PROTOCOL_V2.md) |
-| **master** (current) | Place search, route profiles, street context, thicker lines, **BLE UART** to the CYD (NimBLE v2; stable connect / deferred TFT) |
+| **master** (current) | Place search, route profiles, street context, **BLE UART** (NimBLE v2), Maps-style **light/dark theme** + touch switch on the CYD |
 
 ---
 
@@ -260,4 +280,4 @@ If the CYD reboots when connecting, make sure you have the current firmware: TFT
 
 ## Summary
 
-DisplayConnect turns an inexpensive **ESP32 CYD** into a **dedicated bike navigation display**. Since **v2.0**, the Android app no longer mirrors the screen: it uses **GPS + OSRM + OpenStreetMap**, sends **lightweight JSON** over **BLE**, and the CYD **draws the route and map** with TFT_eSPI. The phone can stay locked; the handlebar display shows turn-by-turn navigation without JPEG streaming or a Wi‑Fi hotspot between phone and CYD.
+DisplayConnect turns an inexpensive **ESP32 CYD** into a **dedicated bike navigation display**. Since **v2.0**, the Android app no longer mirrors the screen: it uses **GPS + OSRM + OpenStreetMap**, sends **lightweight JSON** over **BLE**, and the CYD **draws the route and map** with TFT_eSPI (Maps-style light/dark UI, toggleable by touch). The phone can stay locked; the handlebar display shows turn-by-turn navigation without JPEG streaming or a Wi‑Fi hotspot between phone and CYD.

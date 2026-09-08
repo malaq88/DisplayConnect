@@ -77,7 +77,7 @@ No drawing update. Keeps the connection alive. Sent as a line over BLE RX.
 {"type":"loading"}
 ```
 
-Shows a loading screen on the CYD (spinner + “Loading map…”) until the next `nav` message. Sent when the app starts navigation while OSRM/GPS data is still being prepared. Also shown automatically when a BLE client connects.
+Shows a loading screen on the CYD (spinner + “Getting directions…”) until the next `nav` message. Sent when the app starts navigation while OSRM/GPS data is still being prepared. Also shown automatically when a BLE client connects. Colors follow the local light/dark theme (not sent in JSON).
 
 ### Navigation (`nav`)
 
@@ -117,6 +117,9 @@ Shows a loading screen on the CYD (spinner + “Loading map…”) until the nex
 - Origin: top-left `(0, 0)`
 - Center of map = current GPS position
 - Scale controlled by Android setting `mapScaleMeters` (half-width of visible area in meters)
+- Bottom **88 px** overlay: maneuver text + on-device **light/dark theme switch** (UI only; not in the protocol)
+
+Theme preference is stored on the CYD in NVS and does not affect the JSON schema.
 
 ---
 
@@ -138,11 +141,11 @@ Typical payload size: **under 2 KB**.
 
 `MapRenderer::draw()`:
 
-1. Clear map area (black)
-2. Draw `streets` segments — dark gray, 2 px thick
-3. Draw `route` polyline — green, 3 px thick
-4. Draw user marker + bearing arrow — cyan
-5. Draw overlay strip (bottom 88 px): distance, instruction, street name (or HTML text)
+1. Clear map area (theme land color; soft park blobs in light mode)
+2. Draw `streets` — road casing then fill
+3. Draw `route` polyline — blue with light edge (two passes)
+4. Draw user puck + bearing arrow
+5. Draw bottom sheet overlay: distance, instruction, street (or HTML text) + theme switch
 
 ---
 
@@ -191,6 +194,10 @@ The ESP32 does **not** render HTML/CSS — `html_renderer` strips simple tags an
 - **TFT_eSPI** — display driver and drawing primitives
 - **NimBLE-Arduino** v2.x — BLE GATT UART server (callbacks with `NimBLEConnInfo`)
 - **ArduinoJson** v7+ — JSON parse (only from `loop()`)
+- **XPT2046_Touchscreen** — resistive touch for the on-device theme switch
+- **Preferences** (ESP32 Arduino core) — persist light/dark theme in NVS
+
+Firmware UI modules: `map_renderer`, `maps_theme`, `touch_cyd`, `loading_screen`, `html_renderer`.
 
 ### Android
 

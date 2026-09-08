@@ -15,11 +15,16 @@
 
 #define BLE_MTU 256
 
-// TFT display — configured in Arduino/libraries/TFT_eSPI/Setup_User.h
+// TFT display — configured in Arduino/libraries/TFT_eSPI/User_Setup.h
+// Touch (XPT2046 on CYD): CS=33, IRQ=36, MOSI=32, MISO=39, CLK=25
+//   (see touch_cyd.cpp — used for the on-screen light/dark theme switch)
 //
 // Arduino libraries required:
 //   - TFT_eSPI
 //   - NimBLE-Arduino (h2zero) v2.x+
 //   - ArduinoJson (v7+)
+//   - XPT2046_Touchscreen
+//
+// Theme preference is stored with ESP32 Preferences (NVS namespace "ui").
 //
 // Note: Never draw on the TFT from BLE callbacks (causes CYD reboot).
