@@ -1,0 +1,22 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "display.c"
+        "ui.c"
+        "ble_nus.c"
+        "nav_protocol.c"
+        "map_renderer.c"
+        "loading_screen.c"
+        "maps_theme.c"
+        "touch.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        nvs_flash
+        bt
+        esp_driver_gpio
+        esp_driver_spi
+        esp_driver_i2c
+        esp_driver_ledc
+        esp_lcd
+        esp_timer
+)

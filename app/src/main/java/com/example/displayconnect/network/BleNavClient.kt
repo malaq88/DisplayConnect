@@ -18,6 +18,7 @@ import android.os.Build
 import android.os.ParcelUuid
 import com.example.displayconnect.models.ConnectionState
 import com.example.displayconnect.protocol.NavMessage
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,9 +32,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * BLE UART (Nordic NUS) client for JSON navigation updates to the ESP32 CYD.
@@ -56,6 +59,7 @@ class BleNavClient(context: Context) {
     private var scanJob: Job? = null
     private val shouldReconnect = AtomicBoolean(false)
     private val writeMutex = Mutex()
+    private val writeAck = AtomicReference<CompletableDeferred<Boolean>?>(null)
 
     private var targetAddress: String = ""
 
@@ -210,7 +214,7 @@ class BleNavClient(context: Context) {
         }
     }
 
-    private fun writeInChunks(
+    private suspend fun writeInChunks(
         gatt: BluetoothGatt,
         characteristic: BluetoothGattCharacteristic,
         payload: ByteArray
@@ -219,23 +223,32 @@ class BleNavClient(context: Context) {
         while (offset < payload.size) {
             val end = minOf(offset + writeChunkSize, payload.size)
             val chunk = payload.copyOfRange(offset, end)
-            val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val deferred = CompletableDeferred<Boolean>()
+            writeAck.set(deferred)
+
+            val queued = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 gatt.writeCharacteristic(
                     characteristic,
                     chunk,
-                    BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-                ) == 0
+                    BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                ) == BluetoothGatt.GATT_SUCCESS
             } else {
                 @Suppress("DEPRECATION")
                 run {
-                    characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                    characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
                     characteristic.value = chunk
                     gatt.writeCharacteristic(characteristic)
                 }
             }
-            if (!ok) break
+            if (!queued) {
+                writeAck.compareAndSet(deferred, null)
+                break
+            }
+
+            val acked = withTimeoutOrNull(WRITE_TIMEOUT_MS) { deferred.await() } == true
+            writeAck.compareAndSet(deferred, null)
+            if (!acked) break
             offset = end
-            Thread.sleep(8)
         }
     }
 
@@ -268,11 +281,14 @@ class BleNavClient(context: Context) {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                 _connectionState.value = ConnectionState.CONNECTING
-                gatt.requestMtu(REQUESTED_MTU)
-                gatt.discoverServices()
+                // Request MTU first; discover services in onMtuChanged (or fallback).
+                if (!gatt.requestMtu(REQUESTED_MTU)) {
+                    gatt.discoverServices()
+                }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 heartbeatJob?.cancel()
                 rxCharacteristic = null
+                writeAck.getAndSet(null)?.complete(false)
                 try {
                     gatt.close()
                 } catch (_: Exception) {
@@ -290,6 +306,15 @@ class BleNavClient(context: Context) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 writeChunkSize = (mtu - 3).coerceIn(20, 500)
             }
+            gatt.discoverServices()
+        }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            writeAck.getAndSet(null)?.complete(status == BluetoothGatt.GATT_SUCCESS)
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
@@ -336,6 +361,7 @@ class BleNavClient(context: Context) {
         private const val DEVICE_NAME_HINT = "DisplayConnect"
         private const val REQUESTED_MTU = 512
         private const val DEFAULT_CHUNK = 180
+        private const val WRITE_TIMEOUT_MS = 2000L
         private const val HEARTBEAT_INTERVAL_SEC = 15L
         private const val RECONNECT_DELAY_MS = 3000L
         private const val SCAN_DURATION_MS = 10_000L

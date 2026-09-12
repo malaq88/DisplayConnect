@@ -1,0 +1,6 @@
+## IDF Component Manager — JC3248W535EN display + cJSON (ESP-IDF 6+)
+dependencies:
+  espressif/esp_lcd_axs15231b: "^2.0.0"
+  espressif/cjson: "^1.7.19"
+  idf:
+    version: ">=5.1.0"
