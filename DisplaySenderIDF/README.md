@@ -57,7 +57,10 @@ idf.py build
 ## App Android
 
 1. No app, escaneie BLE e conecte em **DisplayConnect-S3** (mesmo NUS / framing `\n` do CYD).
-2. O Android ainda projeta o mapa em **240×232**; este firmware **escala** para 320×370 (área de mapa) + overlay.
+2. O Android projeta o mapa em **240×232**; este firmware **escala** para 320×370 (área de mapa) + overlay.
+3. A partir da **v3.0** o overlay também mostra tempo/distância restantes, GPS fraco e fora da rota.
+
+Protocolo: [docs/PROTOCOL_V2.md](../docs/PROTOCOL_V2.md). Melhorias de navegação da v3.0 adaptadas de [PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1).
 
 ## Estrutura
 

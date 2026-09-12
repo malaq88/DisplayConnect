@@ -15,6 +15,9 @@ import com.example.displayconnect.DisplayConnectApp
 import com.example.displayconnect.MainActivity
 import com.example.displayconnect.R
 import com.example.displayconnect.routing.OsrmRouteProvider
+import com.example.displayconnect.routing.OverpassStreetProvider
+import com.example.displayconnect.offline.OfflineMapRepository
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +36,7 @@ class NavigationForegroundService : Service() {
         when (intent?.action) {
             ACTION_START -> handleStart(intent)
             ACTION_STOP -> stopNavigationService()
+            ACTION_RETRY_DOWNLOAD -> navigationEngine?.retryOfflineDownload()
         }
         return START_STICKY
     }
@@ -56,12 +60,15 @@ class NavigationForegroundService : Service() {
         startForegroundWithNotification(buildNotification())
 
         val app = application as DisplayConnectApp
+        navigationEngine?.stopNavigation()
         val engine = NavigationEngine(
             scope = serviceScope,
             locationTracker = LocationTracker(this),
             routeProvider = OsrmRouteProvider(),
+            offlineMap = OfflineMapRepository(File(filesDir, "offline-map-v1"), OverpassStreetProvider()),
             navClient = app.navClient,
-            settingsProvider = { app.settingsRepository.settings.first() }
+            settingsProvider = { app.settingsRepository.settings.first() },
+            onNavigationEnded = { stopNavigationService() }
         )
         navigationEngine = engine
         engine.startNavigation(destLat, destLon)
@@ -103,19 +110,19 @@ class NavigationForegroundService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.notification_title))
-            .setContentText(getString(R.string.notification_nav_text))
+            .setContentTitle(com.example.displayconnect.utils.AppLanguage.context(this).getString(R.string.notification_title))
+            .setContentText(com.example.displayconnect.utils.AppLanguage.context(this).getString(R.string.notification_nav_text))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(openIntent)
             .setOngoing(true)
-            .addAction(0, getString(R.string.stop_navigation), stopPending)
+            .addAction(0, com.example.displayconnect.utils.AppLanguage.context(this).getString(R.string.stop_navigation), stopPending)
             .build()
     }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            getString(R.string.notification_channel_name),
+            com.example.displayconnect.utils.AppLanguage.context(this).getString(R.string.notification_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
@@ -124,6 +131,7 @@ class NavigationForegroundService : Service() {
     companion object {
         const val ACTION_START = "com.example.displayconnect.action.START_NAV"
         const val ACTION_STOP = "com.example.displayconnect.action.STOP_NAV"
+        const val ACTION_RETRY_DOWNLOAD = "com.example.displayconnect.action.RETRY_MAP_DOWNLOAD"
         const val EXTRA_DEST_LAT = "extra_dest_lat"
         const val EXTRA_DEST_LON = "extra_dest_lon"
         private const val CHANNEL_ID = "display_connect_nav"
@@ -143,6 +151,10 @@ class NavigationForegroundService : Service() {
                 action = ACTION_STOP
             }
             context.startService(intent)
+        }
+
+        fun retryDownload(context: Context) {
+            context.startService(Intent(context, NavigationForegroundService::class.java).apply { action = ACTION_RETRY_DOWNLOAD })
         }
     }
 }

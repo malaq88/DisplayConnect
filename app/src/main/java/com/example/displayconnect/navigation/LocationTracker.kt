@@ -16,7 +16,9 @@ data class LocationUpdate(
     val lat: Double,
     val lon: Double,
     val bearing: Float,
-    val speedMps: Float
+    val speedMps: Float,
+    val accuracyM: Float = Float.POSITIVE_INFINITY,
+    val elapsedMs: Long = 0
 )
 
 class LocationTracker(context: Context) {
@@ -26,24 +28,30 @@ class LocationTracker(context: Context) {
     @SuppressLint("MissingPermission")
     fun locationFlow(intervalMs: Long): Flow<LocationUpdate> = callbackFlow {
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMs)
-            .setMinUpdateIntervalMillis(intervalMs / 2)
+            .setMinUpdateIntervalMillis(intervalMs)
+            .setMaxUpdateAgeMillis(0)
+            .setMaxUpdateDelayMillis(0)
+            .setWaitForAccurateLocation(true)
             .build()
 
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                val location = result.lastLocation ?: return
+                val location = result.locations.maxByOrNull { it.elapsedRealtimeNanos } ?: return
                 trySend(
                     LocationUpdate(
                         lat = location.latitude,
                         lon = location.longitude,
-                        bearing = if (location.hasBearing()) location.bearing else 0f,
-                        speedMps = if (location.hasSpeed()) location.speed else 0f
+                        bearing = if (location.hasBearing()) location.bearing else Float.NaN,
+                        speedMps = if (location.hasSpeed()) location.speed else 0f,
+                        accuracyM = if (location.hasAccuracy()) location.accuracy else Float.POSITIVE_INFINITY,
+                        elapsedMs = location.elapsedRealtimeNanos / 1_000_000
                     )
                 )
             }
         }
 
         fusedClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
+            .addOnFailureListener { close(it) }
         awaitClose { fusedClient.removeLocationUpdates(callback) }
     }
 }

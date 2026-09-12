@@ -7,7 +7,7 @@
 #include "config.h"
 
 #define NAV_MAX_ROUTE_POINTS      64
-#define NAV_MAX_STREET_SEGMENTS   56
+#define NAV_MAX_STREET_SEGMENTS   128
 #define SCR_W                     LCD_H_RES
 #define SCR_H                     LCD_V_RES
 /* Larger map on 480h panel; bottom sheet ~110px like Google Maps nav card */
@@ -23,8 +23,13 @@ typedef struct {
     double lon;
     float bearing;
     int distance_m;
-    char instruction[64];
-    char street[48];
+    int remaining_m;
+    int remaining_s;
+    bool off_route;
+    bool english;
+    bool gps_weak;
+    char instruction[128];
+    char street[96];
     char html[NAV_HTML_MAX];
     bool has_html;
     int route_count;

@@ -1,6 +1,7 @@
 package com.example.displayconnect.routing
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,15 +23,14 @@ class OsrmRouteProvider(
         withContext(Dispatchers.IO) {
             runCatching {
                 val url = buildString {
-                    append(BASE_URL)
-                    append(profile.osrmProfile)
-                    append('/')
+                    append(profile.routeBaseUrl)
                     append(origin.lon).append(',').append(origin.lat)
                     append(';')
                     append(destination.lon).append(',').append(destination.lat)
-                    append("?overview=full&geometries=geojson&steps=true")
+                    append("?overview=full&geometries=geojson&steps=true&annotations=distance,duration")
                 }
-                val request = Request.Builder().url(url).get().build()
+                val request = Request.Builder().url(url)
+                    .header("User-Agent", "DisplayConnect-CYD/2.1 (personal navigation)").get().build()
                 val body = client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         error("OSRM HTTP ${response.code}")
@@ -38,7 +38,7 @@ class OsrmRouteProvider(
                     response.body?.string() ?: error("Empty OSRM response")
                 }
                 parseResponse(body)
-            }
+            }.onFailure { if (it is CancellationException) throw it }
         }
 
     private fun parseResponse(json: String): RouteData {
@@ -58,8 +58,17 @@ class OsrmRouteProvider(
         }
 
         val steps = mutableListOf<RouteStep>()
+        val segmentDistances = mutableListOf<Double>()
+        val segmentDurations = mutableListOf<Double>()
         val legs = route.getJSONArray("legs")
         for (l in 0 until legs.length()) {
+            val annotation = legs.getJSONObject(l).optJSONObject("annotation")
+            annotation?.optJSONArray("distance")?.let { values ->
+                for (i in 0 until values.length()) segmentDistances.add(values.getDouble(i))
+            }
+            annotation?.optJSONArray("duration")?.let { values ->
+                for (i in 0 until values.length()) segmentDurations.add(values.getDouble(i))
+            }
             val legSteps = legs.getJSONObject(l).getJSONArray("steps")
             for (s in 0 until legSteps.length()) {
                 val step = legSteps.getJSONObject(s)
@@ -82,7 +91,8 @@ class OsrmRouteProvider(
             }
         }
 
-        return RouteData(coordinates = points, steps = steps)
+        return RouteData(points, steps, route.getDouble("distance"), route.getDouble("duration"),
+            segmentDistances, segmentDurations)
     }
 
     private fun formatInstruction(type: String, modifier: String): String = when {
@@ -99,7 +109,4 @@ class OsrmRouteProvider(
         else -> type.replaceFirstChar { it.uppercase() }
     }
 
-    companion object {
-        private const val BASE_URL = "https://router.project-osrm.org/route/v1/"
-    }
 }

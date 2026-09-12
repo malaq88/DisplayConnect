@@ -12,13 +12,30 @@ static void copyTruncated(char* dest, size_t destSize, const char* src) {
   }
   strncpy(dest, src, destSize - 1);
   dest[destSize - 1] = '\0';
+  size_t valid = 0;
+  for (size_t i = 0; dest[i];) {
+    const uint8_t lead = static_cast<uint8_t>(dest[i]);
+    const size_t bytes = lead < 128 ? 1 : (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 1;
+    bool complete = true;
+    for (size_t n = 1; n < bytes; ++n) {
+      if (i + n >= destSize || dest[i + n] == '\0' || (static_cast<uint8_t>(dest[i + n]) & 0xC0) != 0x80) {
+        complete = false;
+        break;
+      }
+    }
+    if (!complete) {
+      break;
+    }
+    i += bytes;
+    valid = i;
+  }
+  dest[valid] = '\0';
 }
 
 bool isLoadingJson(const char* json, size_t length) {
   if (json == nullptr || length < 10) {
     return false;
   }
-  // Fast path — avoid allocating JsonDocument on every small frame
   return strstr(json, "\"type\":\"loading\"") != nullptr ||
          strstr(json, "\"type\": \"loading\"") != nullptr;
 }
@@ -51,6 +68,11 @@ bool parseNavJson(const char* json, size_t length, NavState& state) {
   state.lon = doc["lon"] | 0.0;
   state.bearing = doc["bearing"] | 0.0f;
   state.distanceM = doc["distance_m"] | 0;
+  state.remainingM = doc["remaining_m"] | -1;
+  state.remainingS = doc["remaining_s"] | -1;
+  state.offRoute = doc["off_route"] | false;
+  state.english = strcmp(doc["lang"] | "pt-BR", "en") == 0;
+  state.gpsWeak = doc["gps_weak"] | false;
   copyTruncated(state.instruction, sizeof(state.instruction), doc["instruction"] | "");
   copyTruncated(state.street, sizeof(state.street), doc["street"] | "");
 

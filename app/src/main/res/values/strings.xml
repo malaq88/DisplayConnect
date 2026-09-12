@@ -1,8 +1,30 @@
 <resources>
+    <string name="offline_too_long">Route too long for one download. Split it into shorter trips.</string>
+    <string name="offline_unsupported">This region is outside the supported download area.</string>
+    <string name="offline_too_dense">Too much map data. Try a smaller map scale.</string>
+    <string name="offline_download_error">Download interrupted. Check your internet connection and free storage, then resume. Saved areas will be reused.</string>
+    <string name="fix_map">View or correct OpenStreetMap data</string>
+    <string name="offline_downloading">Preparing offline map…</string>
+    <string name="offline_ready">Route ready for offline use</string>
+    <string name="offline_incomplete">Download incomplete</string>
+    <string name="offline_outside">Outside the downloaded area</string>
+    <string name="offline_progress">%1$d of %2$d areas saved · at least %3$d m on each side</string>
+    <string name="offline_ready_hint">The streets along this route are saved on your phone. GPS and Bluetooth can continue without internet.</string>
+    <string name="offline_wait_hint">Keep internet connected until the route is ready. Long routes may take a few minutes. You can stop and resume without losing saved areas.</string>
+    <string name="offline_outside_hint">The route is saved, but your position is outside its downloaded area. A new route needs internet.</string>
+    <string name="offline_retry">Resume download</string>
+    <string name="remaining_time">Time remaining</string>
+    <string name="remaining_distance">Distance remaining</string>
+    <string name="trip_estimate">Estimated route time, without live traffic.</string>
+    <string name="trip_calculating">Waiting for GPS and route calculation…</string>
+    <string name="trip_off_route">Off route. Restart navigation to recalculate.</string>
+    <string name="search_city">City and state (optional)</string>
+    <string name="search_city_hint">Example: Campinas, SP. Helps distinguish streets with the same name.</string>
+    <string name="search_number_unconfirmed">House number not confirmed. Check the street section before selecting.</string>
+    <string name="search_attribution">Data © OpenStreetMap contributors · Search Nominatim / Photon. Check the city and address before selecting.</string>
     <string name="app_name">DisplayConnect</string>
     <string name="settings">Settings</string>
     <string name="settings_title">Settings</string>
-
     <string name="esp_ip">ESP32 IP</string>
     <string name="esp_port">Port</string>
     <string name="ble_section">Bluetooth (CYD)</string>
@@ -12,25 +34,21 @@
     <string name="ble_saved_device">Saved: %1$s</string>
     <string name="connect">Connect</string>
     <string name="disconnect">Disconnect</string>
-
     <string name="stats_title">Statistics</string>
     <string name="stat_updates">Updates</string>
     <string name="stat_bitrate">Transfer rate</string>
     <string name="stat_resolution">Map area</string>
     <string name="stat_total_updates">Total updates</string>
-
     <string name="connection_connected">Connected</string>
     <string name="connection_connecting">Connecting…</string>
     <string name="connection_reconnecting">Reconnecting…</string>
     <string name="connection_error">Error</string>
     <string name="connection_disconnected">Disconnected</string>
-
     <string name="error_invalid_ip_port">Invalid IP or port</string>
-    <string name="error_no_ble_device">Scan and select a CYD device first</string>
+    <string name="error_no_ble_device">Scan and select the CYD first</string>
     <string name="error_bluetooth_disabled">Turn on Bluetooth and try again</string>
     <string name="error_invalid_destination">Invalid destination coordinates</string>
     <string name="error_not_connected">Connect to the ESP32 first</string>
-
     <string name="navigation_section">Navigation</string>
     <string name="route_profile_section">Route type</string>
     <string name="route_profile_car">Car</string>
@@ -44,22 +62,24 @@
     <string name="dest_coords_section">Coordinates (optional)</string>
     <string name="dest_lat">Destination latitude</string>
     <string name="dest_lon">Destination longitude</string>
-    <string name="dest_hint">Search by name or enter coordinates manually. Route via OSRM.</string>
+    <string name="dest_hint">Search by address or enter coordinates. Routing: OSRM / FOSSGIS.</string>
     <string name="error_search_too_short">Enter at least 3 characters to search</string>
-    <string name="error_search_failed">Place search failed</string>
-    <string name="error_place_not_found">No places found</string>
-    <string name="start_navigation">Start Navigation (OSRM)</string>
+    <string name="error_search_failed">Search unavailable. Check your internet connection and try again.</string>
+    <string name="error_place_not_found">Address not found. Enter the city, try just the street name, or use destination coordinates.</string>
+    <string name="start_navigation">Start navigation</string>
     <string name="start_maps_browser">Open Maps in browser (HTML → CYD)</string>
     <string name="stop_navigation">Stop Navigation</string>
     <string name="navigation_active">Navigation active — map on CYD display</string>
     <string name="maps_browser_title">Google Maps</string>
     <string name="maps_browser_hint">Keep this screen open. Navigation text is sent as HTML to the CYD every 2 seconds.</string>
-
     <string name="setting_nav_hz">Update rate: %1$d Hz</string>
-    <string name="setting_map_scale">Map radius: %1$d m</string>
-    <string name="setting_map_scale_desc">Visible map area around your position (half-width in meters).</string>
-
+    <string name="setting_map_scale">Vertical range: %1$d m</string>
+    <string name="setting_map_scale_desc">Vertical range from the center. Streets stay undistorted. Offline download covers the visible map plus a margin; the scale takes effect when navigation starts.</string>
     <string name="notification_channel_name">Navigation</string>
     <string name="notification_title">DisplayConnect active</string>
     <string name="notification_nav_text">Sending navigation to ESP32</string>
+    <string name="setting_language">Language</string>
+    <string name="gps_weak">GPS weak or outdated — holding the last reliable position</string>
+    <string name="gps_accuracy">GPS accuracy: ±%1$d m</string>
+    <string name="error_precise_location">Enable precise location in app permissions to navigate.</string>
 </resources>

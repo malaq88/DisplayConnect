@@ -4,7 +4,7 @@
 
 **DisplayConnect** sends **bike navigation data** from your Android phone to a cheap **ESP32 CYD** (Cheap Yellow Display) over **Bluetooth Low Energy**. The phone computes GPS, routing, and map geometry; the CYD **draws a vector map** (route, nearby streets, your position, and turn instructions) on a dedicated 2.4″ TFT.
 
-**Current version (`master`):** navigation via **JSON over BLE UART** — the CYD no longer receives a mirror of your phone screen, and no longer needs Wi‑Fi for the phone↔display link.
+**Current version:** **v3.0** (tag [`v3.0`](https://github.com/malaq88/DisplayConnect/releases/tag/v3.0)) — JSON over BLE UART, undistorted vector map, GPS filtering, offline street cache, and FOSSGIS OSRM profiles. Flash the **app and CYD firmware together**.
 
 ---
 
@@ -12,7 +12,7 @@
 
 Starting with **version 2.0**, DisplayConnect **stopped replicating the phone screen**. Navigation is sent as structured data; the CYD draws the map itself.
 
-| | **v1.0** (tag [`v1.0`](https://github.com/malaq88/DisplayConnect/releases/tag/v1.0)) | **v2.0+** (tag [`v2.0`](https://github.com/malaq88/DisplayConnect/releases/tag/v2.0), current `master`) |
+| | **v1.0** (tag [`v1.0`](https://github.com/malaq88/DisplayConnect/releases/tag/v1.0)) | **v2.0+** (tags [`v2.0`](https://github.com/malaq88/DisplayConnect/releases/tag/v2.0), [`v3.0`](https://github.com/malaq88/DisplayConnect/releases/tag/v3.0)) |
 |---|--|--|
 | **Method** | Screen mirroring | JSON navigation |
 | **Phone** | Captures the display with **MediaProjection**, encodes **JPEG** | Uses **GPS + OSRM** to compute the route; projects geometry to screen pixels |
@@ -23,7 +23,9 @@ Starting with **version 2.0**, DisplayConnect **stopped replicating the phone sc
 
 **v2.0 introduced:** JSON protocol, vector map on the CYD, OSRM routing, and optional Google Maps browser mode (HTML text snippet only — not full screen mirroring).
 
-**After v2.0** (`master` today): place search (Nominatim), route profiles (car / motorcycle / bike / walking), nearby street context (Overpass), **BLE transport** (replacing Wi‑Fi WebSocket to the CYD), and a **Maps-style light/dark UI** on the CYD with an on-screen theme switch.
+**After v2.0:** place search (Nominatim), route profiles, nearby streets (Overpass), **BLE transport**, and a **Maps-style light/dark UI** on the CYD.
+
+**v3.0** ports navigation quality work from [PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1) back to the original **CYD 240×320** (`DisplaySender/`): equal-axis map projection, street clipping, GPS filters, remaining time/distance, FOSSGIS bike/foot routing, Nominatim+Photon search, PT/EN, offline street download, and more reliable BLE. Hardware from that fork (LOLIN32 Lite + ST7796S 480×320) is **not** included.
 
 The v1.0 JPEG mirroring code remains in git tag `v1.0` for reference; it is **not** the active flow on `master`.
 
@@ -88,13 +90,14 @@ Tap the **L/D switch** (bottom-right on the waiting screen, or right side of the
 1. **Scan / Connect** the app to the CYD over Bluetooth (`DisplayConnect-CYD`).
 2. **Search** a destination by address/place name (Nominatim) or enter coordinates.
 3. Choose a **route profile**: car, motorcycle, bike, or walking.
-4. Tap **Start Navigation (OSRM)** — a foreground `location` service starts.
+4. Tap **Start Navigation** — a foreground `location` service starts.
 5. On each GPS update, the app:
-   - Fetches or reuses the OSRM route for the selected profile
-   - Optionally loads nearby OSM streets (Overpass, cached while you ride)
-   - Projects route, streets, and position to **screen coordinates**
-   - Sends a JSON `nav` message over **BLE**
-6. The CYD parses JSON and redraws the map (street casing, blue route, position puck, maneuver bottom sheet).
+   - Fetches or reuses the OSRM route (FOSSGIS car / bike / foot graphs)
+   - Filters GPS (age, accuracy, jumps) and may snap small deviations to the route
+   - Loads street geometry (Overpass, persisted along the whole corridor)
+   - Projects route, streets, and position **without stretching axes**
+   - Sends a JSON `nav` message over **BLE** (only the latest frame is kept)
+6. The CYD parses JSON and redraws the map (street casing, blue route, position puck, maneuver + remaining time/distance).
 
 Optional: **Open Maps in browser** mode keeps a WebView open, extracts navigation text as a small HTML snippet, and includes it in each JSON message. The map polyline still comes from GPS + OSRM on the phone.
 
@@ -114,18 +117,19 @@ Full protocol details: [docs/PROTOCOL_V2.md](docs/PROTOCOL_V2.md)
 - **Foreground Service** (`location`) -> Navigation while the screen is locked
 - **BleNavClient** (Android BLE / NUS) -> Sends JSON to the CYD
 - **Coroutines** -> Async GPS, routing, streets, and transmission
-- **OSRM** (`router.project-osrm.org`) -> Car, bike, and walking routes
-- **Nominatim** (OpenStreetMap) -> Address and place search
-- **Overpass API** (OpenStreetMap) -> Nearby street geometry
+- **OSRM** (FOSSGIS `routed-car` / `routed-bike` / `routed-foot`) -> Car, bike, and walking graphs
+- **Nominatim + Photon** -> Address and place search
+- **Overpass API** (OpenStreetMap) -> Street geometry (also stored for offline use)
 - **org.json** (`JSONObject`) -> Builds the `NavMessage` protocol
 - **OkHttp** -> HTTP for OSRM / OSM APIs (internet only)
 - **WebView** (Maps browser mode) -> Extracts Google Maps navigation text (optional)
 
 **Key modules**
 
-- `navigation/` -> `LocationTracker`, `NavigationEngine`, `NavigationForegroundService`
-- `routing/` -> `OsrmRouteProvider`, `NominatimGeocoder`, `OverpassStreetProvider`, `RouteProfile`
-- `map/` -> `MapProjector`, `StreetContextProjector` (lat/lon -> pixels)
+- `navigation/` -> `LocationTracker`, `GpsFilter`, `NavigationEngine`, `NavigationForegroundService`
+- `routing/` -> OSRM, Nominatim/Photon, Overpass, `RouteProfile`, trip remaining time
+- `offline/` -> Persistent street tiles along the route
+- `map/` -> `MapProjector`, `ScreenGeometry`, `StreetContextProjector`
 - `protocol/` -> `NavMessage` JSON builder
 - `network/` -> `BleNavClient`
 - `maps/` -> Maps browser WebView + HTML extractor (optional)
@@ -141,7 +145,7 @@ Full protocol details: [docs/PROTOCOL_V2.md](docs/PROTOCOL_V2.md)
 - **XPT2046_Touchscreen** -> resistive touch for the theme switch
 - **Preferences** (ESP32 core) -> persist light/dark theme in NVS
 
-**Firmware modules:** `nav_protocol.cpp`, `map_renderer.cpp`, `html_renderer.cpp`, `loading_screen.cpp`, `maps_theme.cpp`, `touch_cyd.cpp`.
+**Firmware modules:** `nav_protocol.cpp`, `map_renderer.cpp`, `html_renderer.cpp`, `loading_screen.cpp`, `maps_theme.cpp`, `touch_cyd.cpp`, `utf8_text.cpp`, `latin_font.h`.
 
 The CYD does **not** need Wi‑Fi for navigation display. It only draws vectors and text from BLE JSON.
 
@@ -168,9 +172,10 @@ Important: `route`, `streets`, `user_x`, and `user_y` are already in **screen pi
 DisplayConnect/
 ├── app/                              # Android application
 │   └── src/main/java/com/example/displayconnect/
-│       ├── navigation/                 # GPS, NavigationEngine, foreground service
-│       ├── routing/                    # OSRM, Nominatim, Overpass, RouteProfile
-│       ├── map/                        # MapProjector, StreetContextProjector
+│       ├── navigation/                 # GPS, GpsFilter, NavigationEngine, foreground service
+│       ├── routing/                    # OSRM, Nominatim/Photon, Overpass, RouteProfile
+│       ├── offline/                    # Persistent street cache along the route
+│       ├── map/                        # MapProjector, ScreenGeometry, StreetContextProjector
 │       ├── protocol/                   # NavMessage JSON
 │       ├── network/                    # BleNavClient (BLE UART)
 │       ├── maps/                       # Optional Maps browser WebView
@@ -178,16 +183,19 @@ DisplayConnect/
 │       ├── ui/                         # Compose screens and components
 │       ├── viewmodel/                  # MainViewModel, SettingsViewModel
 │       ├── models/                     # AppSettings, ConnectionState, stats
-│       └── utils/                      # TransmissionHub, StatsTracker
+│       └── utils/                      # TransmissionHub, StatsTracker, AppLanguage
 ├── DisplaySender/                    # ESP32 CYD firmware (Arduino)
 │   ├── DisplaySender.ino
 │   ├── map_renderer.cpp / .h           # Maps-style vector map + theme switch
 │   ├── maps_theme.cpp / .h             # Light/dark palette + NVS
 │   ├── touch_cyd.cpp / .h              # XPT2046 touch (theme toggle)
 │   ├── nav_protocol.cpp / .h
+│   ├── utf8_text.cpp / .h              # Latin-1 glyphs (accents)
+│   ├── latin_font.h
 │   ├── html_renderer.cpp / .h
 │   ├── loading_screen.cpp / .h
 │   └── config.h.example
+├── DisplaySenderIDF/                 # ESP32-S3 JC3248W535EN firmware (ESP-IDF)
 ├── docs/
 │   ├── PROTOCOL_V2.md                  # JSON protocol reference
 │   └── NAV_V2_TASKS.md                 # Development task list
@@ -230,8 +238,9 @@ Legacy JPEG capture code may still exist under `app/.../capture/` from v1 but is
 2. In DisplayConnect: **Scan devices** → select the CYD → **Connect** (loading screen on the CYD).
 3. Select **route type** (car / motorcycle / bike / walking).
 4. **Search** a destination or enter coordinates.
-5. Tap **Start Navigation (OSRM)** and mount the CYD on your handlebar.
-6. Adjust **Settings** if needed (update rate, map radius).
+5. Tap **Start Navigation** and mount the CYD on your handlebar.
+6. Wait until the app shows **Route ready for offline use** if you want streets without internet.
+7. Adjust **Settings** if needed (language, update rate, map radius).
 
 If the CYD reboots when connecting, make sure you have the current firmware: TFT updates must run in `loop()`, not in BLE callbacks.
 
@@ -242,9 +251,10 @@ If the CYD reboots when connecting, make sure you have the current firmware: TFT
 | Setting | Default | Description |
 |---------|---------|-------------|
 | BLE device | — | Saved CYD address / name after scan |
-| Route type | Car | OSRM profile: driving / cycling / walking |
+| Route type | Car | FOSSGIS OSRM: car / bike / foot graphs (motorcycle still uses car) |
 | Update rate | 2 Hz | Navigation JSON updates per second |
-| Map radius | 400 m | Visible half-width around your position |
+| Map radius | 400 m | Vertical range from the center (equal m/pixel on both axes) |
+| Language | Português (Brasil) | UI + CYD overlay (`pt-BR` or `en`) |
 | Destination | — | Saved query, label, and coordinates |
 
 ---
@@ -253,10 +263,12 @@ If the CYD reboots when connecting, make sure you have the current firmware: TFT
 
 - **No native second screen:** The CYD is not an Android external display; it only renders what the app sends in JSON.
 - **BLE range:** Keep phone and CYD within typical BLE distance (~10 m open air; less with pockets/bags).
-- **OSRM public server:** Shared free tier; motorcycle uses the `driving` profile (no dedicated moto profile on public OSRM).
-- **OSM rate limits:** Nominatim and Overpass should be used sparingly (search on user action; street cache refreshes on movement).
+- **OSRM public graphs:** Bike and walking use FOSSGIS `routed-bike` / `routed-foot`. Motorcycle still uses the car graph.
+- **OSM rate limits:** Nominatim, Photon, and Overpass should be used sparingly (search on user action; street tiles persist on the phone).
+- **Offline streets:** GPS, BLE, and already-downloaded streets can continue without internet. Recalculating a new route still needs connectivity.
 - **Maps browser mode:** Requires the WebView activity to stay open; ESP renders stripped text, not full HTML/CSS.
 - **Single BLE client:** One GATT connection at a time.
+- **CYD RAM:** Street budget is **128 segments** (not 384 as on the ST7796S adaptation). App and firmware must be updated together.
 
 ---
 
@@ -266,7 +278,16 @@ If the CYD reboots when connecting, make sure you have the current firmware: TFT
 |-----|-------------|
 | **v1.0** | **Screen mirroring** — MediaProjection + JPEG over binary WebSocket |
 | **v2.0** | **JSON navigation** — OSRM vector map; initially over Wi‑Fi WebSocket. See [docs/PROTOCOL_V2.md](docs/PROTOCOL_V2.md) |
-| **master** (current) | Place search, route profiles, street context, **BLE UART** (NimBLE v2), Maps-style **light/dark theme** + touch switch on the CYD |
+| **v3.0** | CYD port of navigation quality work from [PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1): undistorted map, GPS filter, remaining time, FOSSGIS routing, offline streets, PT/EN, BLE reliability. Also ESP-IDF firmware for JC3248W535EN. |
+
+---
+
+## Credits
+
+- Original project: **Antonio Malaquias** — [malaq88/DisplayConnect](https://github.com/malaq88/DisplayConnect)
+- **v3.0 navigation improvements** were adapted from **[PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1)** (LOLIN32 Lite + ST7796S 3.5″), then reworked for the ESP32-2432S028 CYD (`DisplaySender/`) and the JC3248W535EN (`DisplaySenderIDF/`). That repository is not an official DisplayConnect release.
+
+Map data: **© OpenStreetMap contributors**. Routing: OSRM/FOSSGIS. Search: Nominatim and Photon. Street geometry: Overpass.
 
 ---
 
@@ -280,4 +301,4 @@ If the CYD reboots when connecting, make sure you have the current firmware: TFT
 
 ## Summary
 
-DisplayConnect turns an inexpensive **ESP32 CYD** into a **dedicated bike navigation display**. Since **v2.0**, the Android app no longer mirrors the screen: it uses **GPS + OSRM + OpenStreetMap**, sends **lightweight JSON** over **BLE**, and the CYD **draws the route and map** with TFT_eSPI (Maps-style light/dark UI, toggleable by touch). The phone can stay locked; the handlebar display shows turn-by-turn navigation without JPEG streaming or a Wi‑Fi hotspot between phone and CYD.
+DisplayConnect turns an inexpensive **ESP32 CYD** into a **dedicated bike navigation display**. Since **v2.0**, the Android app no longer mirrors the screen. **v3.0** adds a more stable map and GPS pipeline (with credit to [PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1)), still on the original CYD: **GPS + OSRM + OpenStreetMap**, **JSON over BLE**, and a locally drawn Maps-style UI. The phone can stay locked; the handlebar display shows turn-by-turn navigation without JPEG streaming.

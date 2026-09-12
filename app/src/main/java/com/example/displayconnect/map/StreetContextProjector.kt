@@ -1,69 +1,49 @@
 package com.example.displayconnect.map
 
 import com.example.displayconnect.routing.LatLon
-import kotlin.math.hypot
-import kotlin.math.min
+import kotlin.math.*
 
-/**
- * Projects nearby OSM street ways to screen line segments for the CYD map background.
- */
 object StreetContextProjector {
-
-    const val MAX_SEGMENTS = 56
-    private const val MIN_SEGMENT_PX = 3
+    // Must match NAV_MAX_STREET_SEGMENTS in the CYD firmware.
+    const val MAX_SEGMENTS = 128
 
     fun projectSegments(
-        centerLat: Double,
-        centerLon: Double,
-        ways: List<List<LatLon>>,
-        scaleMeters: Double,
-        maxSegments: Int = MAX_SEGMENTS
+        centerLat: Double, centerLon: Double, ways: List<List<LatLon>>,
+        scaleMeters: Double, maxSegments: Int = MAX_SEGMENTS
     ): List<IntArray> {
-        if (ways.isEmpty()) return emptyList()
-
-        val candidates = mutableListOf<Pair<IntArray, Double>>()
-        for (way in ways) {
-            for (i in 0 until way.lastIndex) {
-                val p0 = MapProjector.projectPoint(
-                    centerLat, centerLon, way[i].lat, way[i].lon, scaleMeters
-                )
-                val p1 = MapProjector.projectPoint(
-                    centerLat, centerLon, way[i + 1].lat, way[i + 1].lon, scaleMeters
-                )
-                if (!segmentVisible(p0, p1)) continue
-                val dx = (p1.first - p0.first).toDouble()
-                val dy = (p1.second - p0.second).toDouble()
-                if (hypot(dx, dy) < MIN_SEGMENT_PX) continue
-
-                val midX = (p0.first + p1.first) / 2.0
-                val midY = (p0.second + p1.second) / 2.0
-                val distFromCenter = hypot(
-                    midX - MapProjector.MAP_WIDTH / 2.0,
-                    midY - MapProjector.MAP_HEIGHT / 2.0
-                )
-                candidates.add(
-                    intArrayOf(p0.first, p0.second, p1.first, p1.second) to distFromCenter
-                )
+        val budget = maxSegments.coerceIn(0, MAX_SEGMENTS)
+        if (budget == 0) return emptyList()
+        val visible = ways.mapNotNull { way ->
+            ScreenGeometry.visibleRuns(way.map {
+                MapProjector.projectUnclipped(centerLat, centerLon, it.lat, it.lon, scaleMeters)
+            }).takeIf { it.isNotEmpty() }
+        }
+        // First simplify all visible streets equally, keeping distant roads as well as central roads.
+        var simplified = visible.map { runs -> runs.map { ScreenGeometry.simplify(it) } }
+        for (tolerance in listOf(2.0, 3.0)) {
+            if (simplified.sumOf { runs -> runs.sumOf { it.size - 1 } } <= budget) break
+            simplified = visible.map { runs -> runs.map { ScreenGeometry.simplify(it, tolerance) } }
+        }
+        // In very dense areas, distribute complete ways over a 6x3 screen grid.
+        val groups = simplified.groupBy { runs ->
+            val points = runs.flatten()
+            val x = (points.minOf { it.x } + points.maxOf { it.x }) / 2
+            val y = (points.minOf { it.y } + points.maxOf { it.y }) / 2
+            (x / (MapProjector.MAP_WIDTH / 6.0)).toInt().coerceIn(0, 5) +
+                6 * (y / (MapProjector.MAP_HEIGHT / 3.0)).toInt().coerceIn(0, 2)
+        }.toSortedMap().values.map { java.util.ArrayDeque(it) }
+        val result = mutableListOf<IntArray>()
+        while (groups.any { it.isNotEmpty() }) {
+            for (group in groups) {
+                if (group.isEmpty()) continue
+                val runs = group.removeFirst()
+                if (runs.sumOf { it.size - 1 } > budget - result.size) continue
+                for (run in runs) for ((a, b) in run.zipWithNext()) {
+                    result.add(intArrayOf(a.x.toInt(), a.y.toInt(), b.x.toInt(), b.y.toInt()))
+                }
+                if (result.size == budget) return result
             }
         }
-
-        return candidates
-            .sortedBy { it.second }
-            .take(maxSegments.coerceAtMost(MAX_SEGMENTS))
-            .map { it.first }
-    }
-
-    private fun segmentVisible(p0: Pair<Int, Int>, p1: Pair<Int, Int>): Boolean {
-        val margin = 8
-        val maxX = MapProjector.MAP_WIDTH + margin
-        val maxY = MapProjector.MAP_HEIGHT + margin
-        fun inBounds(p: Pair<Int, Int>) =
-            p.first in -margin..maxX && p.second in -margin..maxY
-        if (inBounds(p0) || inBounds(p1)) return true
-        val cx = MapProjector.MAP_WIDTH / 2
-        val cy = MapProjector.MAP_HEIGHT / 2
-        val d0 = hypot((p0.first - cx).toDouble(), (p0.second - cy).toDouble())
-        val d1 = hypot((p1.first - cx).toDouble(), (p1.second - cy).toDouble())
-        return min(d0, d1) < maxOf(MapProjector.MAP_WIDTH, MapProjector.MAP_HEIGHT) * 0.75
+        return result
     }
 }

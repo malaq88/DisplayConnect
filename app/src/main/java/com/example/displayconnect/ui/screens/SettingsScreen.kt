@@ -14,6 +14,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.displayconnect.R
+import com.example.displayconnect.ui.components.StatsCard
 import com.example.displayconnect.ui.navigation.SettingsTopBar
 import com.example.displayconnect.viewmodel.SettingsViewModel
 
@@ -32,6 +35,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
+    val stats by viewModel.stats.collectAsState()
+    val language by viewModel.language.collectAsState()
 
     Scaffold(
         topBar = { SettingsTopBar(onNavigateBack) }
@@ -45,6 +50,11 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(modifier = Modifier.height(4.dp))
+            Text(stringResource(R.string.setting_language), style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = language == "pt-BR", onClick = { viewModel.selectLanguage("pt-BR") }, label = { Text("Português (Brasil)") })
+                FilterChip(selected = language == "en", onClick = { viewModel.selectLanguage("en") }, label = { Text("English") })
+            }
 
             SettingSlider(
                 title = stringResource(R.string.setting_nav_hz, settings.navUpdateHz),
@@ -72,6 +82,7 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            StatsCard(stats = stats.copy(resolution = settings.resolutionLabel))
             Spacer(modifier = Modifier.height(16.dp))
         }
     }

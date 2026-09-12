@@ -26,6 +26,9 @@
 #include "loading_screen.h"
 #include "maps_theme.h"
 #include "touch_cyd.h"
+#include "utf8_text.h"
+#include <ArduinoJson.h>
+#include <string.h>
 
 TFT_eSPI tft;
 MapRenderer mapRenderer(tft);
@@ -46,15 +49,17 @@ static bool showingWaiting = true;
 static bool touchWasDown = false;
 static uint32_t lastThemeToggleMs = 0;
 
-static const size_t LINE_BUF_SIZE = 3072;
+static const size_t LINE_BUF_SIZE = 8192;
 static char lineBuf[LINE_BUF_SIZE];
 static size_t lineLen = 0;
+static bool discardLine = false;
 
 // Byte queue filled in BLE write callback, drained in loop()
-static const size_t RX_QUEUE_SIZE = 4096;
+static const size_t RX_QUEUE_SIZE = 8192;
 static uint8_t rxQueue[RX_QUEUE_SIZE];
 static volatile size_t rxHead = 0;
 static volatile size_t rxTail = 0;
+static bool rxOverflow = false;
 
 static NimBLEServer* bleServer = nullptr;
 static NimBLECharacteristic* txCharacteristic = nullptr;
@@ -74,6 +79,7 @@ void redrawAfterThemeChange();
 static bool rxQueuePush(uint8_t b) {
   const size_t next = (rxHead + 1) % RX_QUEUE_SIZE;
   if (next == rxTail) {
+    rxOverflow = true;
     return false; // full
   }
   rxQueue[rxHead] = b;
@@ -98,6 +104,8 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     updatesPerSecond = 0;
     lastStatsMillis = millis();
     lineLen = 0;
+    discardLine = false;
+    rxOverflow = false;
     hasNav = false;
     showingWaiting = false;
     uiShowLoading = true;
@@ -110,6 +118,8 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     awaitingFirstNav = false;
     navUpdatesReceived = 0;
     lineLen = 0;
+    discardLine = false;
+    rxOverflow = false;
     hasNav = false;
     rxHead = 0;
     rxTail = 0;
@@ -138,6 +148,7 @@ void setup() {
   Serial.println(F("=== DisplayConnect CYD v2 (BLE) ==="));
 
   mapsThemeInit();
+  initDisplayLanguage();
 
   if (!initDisplay()) {
     Serial.println(F("Failed to initialize display."));
@@ -306,30 +317,41 @@ void showStatusScreen(const char* title, const char* line2, const char* line3) {
 }
 
 void showWaitingForAppScreen() {
-  showStatusScreen("Ready to navigate", "Bluetooth LE", BLE_DEVICE_NAME);
+  showStatusScreen(displayEnglish() ? "Ready to navigate" : "Pronto para navegar", "Bluetooth LE", BLE_DEVICE_NAME);
 }
 
 void appendRxByte(char c) {
   if (c == '\n' || c == '\r') {
-    if (lineLen > 0) {
+    if (lineLen > 0 && !discardLine) {
       lineBuf[lineLen] = '\0';
       processTextMessage(lineBuf, lineLen);
-      lineLen = 0;
     }
+    lineLen = 0;
+    discardLine = false;
+    return;
+  }
+  if (discardLine) {
     return;
   }
   if (lineLen + 1 >= LINE_BUF_SIZE) {
     Serial.println(F("BLE line buffer overflow — reset"));
     lineLen = 0;
+    discardLine = true;
     return;
   }
   lineBuf[lineLen++] = c;
 }
 
 void drainRxQueue() {
+  if (rxOverflow) {
+    rxTail = rxHead;
+    rxOverflow = false;
+    lineLen = 0;
+    discardLine = true;
+    Serial.println(F("BLE overflow: discarded incomplete frame"));
+  }
   uint8_t b;
-  // Process a bounded number per loop to keep UI responsive
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < 1024; i++) {
     if (!rxQueuePop(b)) {
       break;
     }
@@ -338,6 +360,21 @@ void drainRxQueue() {
 }
 
 void processTextMessage(const char* payload, size_t length) {
+  if (length < 150 && strstr(payload, "\"type\":\"config\"")) {
+    JsonDocument config;
+    if (!deserializeJson(config, payload, length)) {
+      setDisplayLanguage(strcmp(config["lang"] | "pt-BR", "en") == 0);
+      if (hasNav) {
+        lastNav.english = displayEnglish();
+        mapRenderer.draw(lastNav);
+      } else if (showingWaiting) {
+        showWaitingForAppScreen();
+      } else {
+        showMapLoadingScreen(tft);
+      }
+    }
+    return;
+  }
   if (isLoadingJson(payload, length)) {
     awaitingFirstNav = true;
     hasNav = false;
@@ -351,6 +388,7 @@ void processTextMessage(const char* payload, size_t length) {
     return;
   }
 
+  setDisplayLanguage(state.english);
   lastNav = state;
   hasNav = true;
   showingWaiting = false;

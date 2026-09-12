@@ -16,6 +16,8 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Build
 import android.os.ParcelUuid
+import android.os.SystemClock
+import android.util.Log
 import com.example.displayconnect.models.ConnectionState
 import com.example.displayconnect.protocol.NavMessage
 import kotlinx.coroutines.CompletableDeferred
@@ -24,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,6 +63,23 @@ class BleNavClient(context: Context) {
     private val shouldReconnect = AtomicBoolean(false)
     private val writeMutex = Mutex()
     private val writeAck = AtomicReference<CompletableDeferred<Boolean>?>(null)
+    private data class OutgoingFrame(
+        val connection: BluetoothGatt,
+        val characteristic: BluetoothGattCharacteristic,
+        val bytes: ByteArray
+    )
+    private val outgoing = Channel<OutgoingFrame>(Channel.CONFLATED)
+    @Volatile private var lastQueuedAt = 0L
+
+    init {
+        scope.launch {
+            for (frame in outgoing) {
+                writeMutex.withLock {
+                    writeInChunks(frame.connection, frame.characteristic, frame.bytes)
+                }
+            }
+        }
+    }
 
     private var targetAddress: String = ""
 
@@ -157,18 +177,18 @@ class BleNavClient(context: Context) {
         if (_connectionState.value != ConnectionState.CONNECTED) return false
         val characteristic = rxCharacteristic ?: return false
         val gattLocal = gatt ?: return false
-        val payload = (json.trimEnd() + "\n").toByteArray(Charsets.UTF_8)
-
-        scope.launch {
-            writeMutex.withLock {
-                writeInChunks(gattLocal, characteristic, payload)
-            }
+        val payload = ("\n" + json.trimEnd() + "\n").toByteArray(Charsets.UTF_8)
+        if (payload.size > MAX_PAYLOAD_BYTES) {
+            Log.w(TAG, "Navigation frame exceeds CYD buffer: ${payload.size}")
+            return false
         }
-        return true
+        lastQueuedAt = SystemClock.elapsedRealtime()
+        return outgoing.trySend(OutgoingFrame(gattLocal, characteristic, payload)).isSuccess
     }
 
     fun release() {
         disconnect(manual = true)
+        outgoing.close()
         scope.cancel()
     }
 
@@ -209,7 +229,9 @@ class BleNavClient(context: Context) {
         heartbeatJob = scope.launch {
             while (isActive && _connectionState.value == ConnectionState.CONNECTED) {
                 delay(HEARTBEAT_INTERVAL_SEC * 1000)
-                sendNavMessage(NavMessage.heartbeat())
+                if (SystemClock.elapsedRealtime() - lastQueuedAt >= HEARTBEAT_INTERVAL_SEC * 1000) {
+                    sendNavMessage(NavMessage.heartbeat())
+                }
             }
         }
     }
@@ -361,7 +383,9 @@ class BleNavClient(context: Context) {
         private const val DEVICE_NAME_HINT = "DisplayConnect"
         private const val REQUESTED_MTU = 512
         private const val DEFAULT_CHUNK = 180
+        private const val MAX_PAYLOAD_BYTES = 8192
         private const val WRITE_TIMEOUT_MS = 2000L
+        private const val TAG = "DisplayConnectBLE"
         private const val HEARTBEAT_INTERVAL_SEC = 15L
         private const val RECONNECT_DELAY_MS = 3000L
         private const val SCAN_DURATION_MS = 10_000L

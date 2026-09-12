@@ -14,6 +14,7 @@ class DisplayConnectApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.example.displayconnect.utils.AppLanguage.load(this)
         settingsRepository = SettingsRepository(this)
         navClient = BleNavClient(this)
     }

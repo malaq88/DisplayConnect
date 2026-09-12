@@ -19,9 +19,18 @@ object MapProjector {
         routePoints: List<Pair<Double, Double>>,
         scaleMeters: Double
     ): List<Pair<Int, Int>> {
-        return routePoints.map { (lat, lon) ->
-            projectPoint(centerLat, centerLon, lat, lon, scaleMeters)
+        val runs = ScreenGeometry.visibleRuns(routePoints.map { (lat, lon) ->
+            projectUnclipped(centerLat, centerLon, lat, lon, scaleMeters)
+        })
+        val result = mutableListOf<Pair<Int, Int>>()
+        for (run in runs) {
+            val simplified = ScreenGeometry.simplify(run)
+            val remaining = 64 - result.size - if (result.isEmpty()) 0 else 1
+            if (remaining < 2) break
+            if (result.isNotEmpty()) result.add(-1 to -1) // Off-screen gap; never draw a shortcut.
+            result.addAll(simplified.take(remaining).map { it.x.toInt() to it.y.toInt() })
         }
+        return result
     }
 
     fun projectPoint(
@@ -31,14 +40,24 @@ object MapProjector {
         lon: Double,
         scaleMeters: Double
     ): Pair<Int, Int> {
+        val point = projectUnclipped(centerLat, centerLon, lat, lon, scaleMeters)
+        return point.x.roundToInt().coerceIn(0, MAP_WIDTH - 1) to
+            point.y.roundToInt().coerceIn(0, MAP_HEIGHT - 1)
+    }
+
+    fun projectUnclipped(
+        centerLat: Double, centerLon: Double, lat: Double, lon: Double, scaleMeters: Double
+    ): ScreenPoint {
         val metersPerDegLon = METERS_PER_DEG_LAT * cos(Math.toRadians(centerLat))
         val dxMeters = (lon - centerLon) * metersPerDegLon
         val dyMeters = (lat - centerLat) * METERS_PER_DEG_LAT
 
         val halfW = scaleMeters.coerceAtLeast(50.0)
-        val x = (MAP_WIDTH / 2.0 + (dxMeters / halfW) * (MAP_WIDTH / 2.0)).roundToInt()
-        val y = (MAP_HEIGHT / 2.0 - (dyMeters / halfW) * (MAP_HEIGHT / 2.0)).roundToInt()
-        return x.coerceIn(0, MAP_WIDTH - 1) to y.coerceIn(0, MAP_HEIGHT - 1)
+        // Preserve vertical range and use equal pixel scale on both axes.
+        // The landscape display shows more context horizontally, without stretching roads.
+        val pixelsPerMeter = MAP_HEIGHT / (2.0 * halfW)
+        return ScreenPoint(MAP_WIDTH / 2.0 + dxMeters * pixelsPerMeter,
+            MAP_HEIGHT / 2.0 - dyMeters * pixelsPerMeter)
     }
 
     fun simplifyRoute(

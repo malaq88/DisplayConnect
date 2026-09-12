@@ -16,7 +16,12 @@ data class NavMessage(
     val routeScreenPoints: List<Pair<Int, Int>>,
     val streetSegments: List<IntArray> = emptyList(),
     val userScreenPoint: Pair<Int, Int>?,
-    val html: String? = null
+    val html: String? = null,
+    val remainingDistanceM: Int? = null,
+    val remainingDurationS: Int? = null,
+    val offRoute: Boolean = false,
+    val language: String = "pt-BR",
+    val gpsWeak: Boolean = false
 ) {
     fun toJson(): String {
         val route = JSONArray()
@@ -28,9 +33,14 @@ data class NavMessage(
             .put("lat", lat)
             .put("lon", lon)
             .put("bearing", bearing.toDouble())
-            .put("instruction", instruction)
+            .put("instruction", java.text.Normalizer.normalize(instruction, java.text.Normalizer.Form.NFC).take(63))
             .put("distance_m", distanceM)
-            .put("street", street)
+            .put("remaining_m", remainingDistanceM ?: -1)
+            .put("remaining_s", remainingDurationS ?: -1)
+            .put("off_route", offRoute)
+            .put("lang", language)
+            .put("gps_weak", gpsWeak)
+            .put("street", java.text.Normalizer.normalize(street, java.text.Normalizer.Form.NFC).take(47))
             .put("route", route)
         if (streetSegments.isNotEmpty()) {
             val streets = JSONArray()

@@ -14,6 +14,9 @@ import kotlinx.coroutines.launch
  * ViewModel da tela de configurações.
  */
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+    val language = com.example.displayconnect.utils.AppLanguage.language
+    fun selectLanguage(tag: String) = com.example.displayconnect.utils.AppLanguage.select(getApplication(), tag)
+    val stats = com.example.displayconnect.utils.TransmissionHub.stats
 
     private val settingsRepository = (application as DisplayConnectApp).settingsRepository
 

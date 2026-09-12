@@ -56,11 +56,18 @@ bool parse_nav_json(const char *json, size_t length, nav_state_t *state)
 
     memset(state, 0, sizeof(*state));
     state->valid = true;
+    state->remaining_m = -1;
+    state->remaining_s = -1;
 
     const cJSON *lat = cJSON_GetObjectItemCaseSensitive(doc, "lat");
     const cJSON *lon = cJSON_GetObjectItemCaseSensitive(doc, "lon");
     const cJSON *bearing = cJSON_GetObjectItemCaseSensitive(doc, "bearing");
     const cJSON *distance = cJSON_GetObjectItemCaseSensitive(doc, "distance_m");
+    const cJSON *remaining_m = cJSON_GetObjectItemCaseSensitive(doc, "remaining_m");
+    const cJSON *remaining_s = cJSON_GetObjectItemCaseSensitive(doc, "remaining_s");
+    const cJSON *off_route = cJSON_GetObjectItemCaseSensitive(doc, "off_route");
+    const cJSON *lang = cJSON_GetObjectItemCaseSensitive(doc, "lang");
+    const cJSON *gps_weak = cJSON_GetObjectItemCaseSensitive(doc, "gps_weak");
     if (cJSON_IsNumber(lat)) {
         state->lat = lat->valuedouble;
     }
@@ -72,6 +79,21 @@ bool parse_nav_json(const char *json, size_t length, nav_state_t *state)
     }
     if (cJSON_IsNumber(distance)) {
         state->distance_m = distance->valueint;
+    }
+    if (cJSON_IsNumber(remaining_m)) {
+        state->remaining_m = remaining_m->valueint;
+    }
+    if (cJSON_IsNumber(remaining_s)) {
+        state->remaining_s = remaining_s->valueint;
+    }
+    if (cJSON_IsBool(off_route)) {
+        state->off_route = cJSON_IsTrue(off_route);
+    }
+    if (cJSON_IsString(lang) && lang->valuestring) {
+        state->english = strcmp(lang->valuestring, "en") == 0;
+    }
+    if (cJSON_IsBool(gps_weak)) {
+        state->gps_weak = cJSON_IsTrue(gps_weak);
     }
 
     const cJSON *instruction = cJSON_GetObjectItemCaseSensitive(doc, "instruction");

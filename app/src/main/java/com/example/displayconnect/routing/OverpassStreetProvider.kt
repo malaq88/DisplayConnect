@@ -1,115 +1,91 @@
 package com.example.displayconnect.routing
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import com.example.displayconnect.offline.GeoBounds
+import com.example.displayconnect.offline.StreetSource
+import com.example.displayconnect.offline.StreetWay
+import kotlinx.coroutines.*
+import okhttp3.*
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.util.concurrent.TimeUnit
-import kotlin.math.cos
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
-/**
- * Fetches nearby road geometry from OpenStreetMap via Overpass (no API key).
- */
+/** Small sequential batches, full geometries, no partial response accepted as offline coverage. */
 class OverpassStreetProvider(
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
-        .build()
-) {
-
-    suspend fun fetchStreetWays(
-        centerLat: Double,
-        centerLon: Double,
-        radiusMeters: Double,
-        sampleRatio: Double = STREET_SAMPLE_RATIO
-    ): Result<List<List<LatLon>>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val latDelta = radiusMeters / METERS_PER_DEG_LAT
-            val lonDelta = radiusMeters / (METERS_PER_DEG_LAT * cos(Math.toRadians(centerLat)))
-            val south = centerLat - latDelta
-            val north = centerLat + latDelta
-            val west = centerLon - lonDelta
-            val east = centerLon + lonDelta
-
-            val query = buildQuery(south, west, north, east)
-            val request = Request.Builder()
-                .url(OVERPASS_URL)
-                .header("User-Agent", USER_AGENT)
-                .post(query.toRequestBody("application/x-www-form-urlencoded".toMediaType()))
-                .build()
-
-            val body = client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    error("Overpass HTTP ${response.code}")
-                }
-                response.body?.string() ?: error("Empty Overpass response")
+        .connectTimeout(15, TimeUnit.SECONDS).readTimeout(65, TimeUnit.SECONDS)
+        .callTimeout(75, TimeUnit.SECONDS).build()
+) : StreetSource {
+    override suspend fun fetch(bounds: List<GeoBounds>): List<StreetWay> = withContext(Dispatchers.IO) {
+        try {
+            require(bounds.size in 1..4)
+            val selectors = bounds.joinToString("\n") {
+                "way[highway][highway!~\"^(proposed|construction|abandoned|razed)$\"](" +
+                    it.south + "," + it.west + "," + it.north + "," + it.east + ");"
             }
-
-            sampleWays(parseWays(body), sampleRatio)
-        }
-    }
-
-    private fun buildQuery(south: Double, west: Double, north: Double, east: Double): String {
-        val bbox = "$south,$west,$north,$east"
-        val overpass = """
-            [out:json][timeout:12];
-            (
-              way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street|service)$"]($bbox);
-            );
-            out geom;
-        """.trimIndent()
-        return "data=${java.net.URLEncoder.encode(overpass, Charsets.UTF_8.name())}"
-    }
-
-    private fun parseWays(json: String): List<StreetWay> {
-        val elements = JSONObject(json).getJSONArray("elements")
-        return buildList {
-            for (i in 0 until elements.length()) {
-                val element = elements.getJSONObject(i)
-                if (element.optString("type") != "way") continue
-                val geometry = element.optJSONArray("geometry") ?: continue
-                if (geometry.length() < 2) continue
-                val points = buildList {
-                    for (g in 0 until geometry.length()) {
-                        val node = geometry.getJSONObject(g)
-                        add(LatLon(node.getDouble("lat"), node.getDouble("lon")))
+            val query = "[out:json][timeout:45][maxsize:67108864];(" + selectors + ");out geom;"
+            val request = Request.Builder().url("https://overpass-api.de/api/interpreter")
+                .header("User-Agent", "DisplayConnect-CYD/2.1 (personal route offline map)")
+                .post(FormBody.Builder().add("data", query).build()).build()
+            val json = requestBody(request)
+            currentCoroutineContext().ensureActive()
+            val root = JSONObject(json)
+            // Overpass may return HTTP 200 with partial results plus a timeout/size remark.
+            check(root.optString("remark").isBlank()) { "Servidor de mapas ocupado. Tente novamente para concluir as áreas restantes." }
+            val elements = root.getJSONArray("elements")
+            var pointCount = 0
+            val ways = buildList {
+                for (i in 0 until elements.length()) {
+                    currentCoroutineContext().ensureActive()
+                    val element = elements.getJSONObject(i)
+                    if (element.optString("type") != "way") continue
+                    val geometry = element.optJSONArray("geometry") ?: continue
+                    require(geometry.length() >= 2) { "Geometria de rua incompleta" }
+                    pointCount += geometry.length()
+                    check(pointCount <= 300000) { "Área com dados demais. Tente uma escala menor." }
+                    val points = List(geometry.length()) { g ->
+                        val point = geometry.getJSONObject(g)
+                        LatLon(point.getDouble("lat"), point.getDouble("lon")).also {
+                            require(it.lat in -90.0..90.0 && it.lon in -180.0..180.0)
+                        }
                     }
-                }
-                if (points.size >= 2) {
-                    val tags = element.optJSONObject("tags")
-                    val highway = tags?.optString("highway", "unclassified") ?: "unclassified"
-                    add(StreetWay(highway, points))
+                    add(StreetWay(element.getLong("id"), points))
                 }
             }
-        }
+            ways
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { throw e }
     }
 
-    private fun sampleWays(ways: List<StreetWay>, ratio: Double): List<List<LatLon>> {
-        if (ways.isEmpty()) return emptyList()
-        val clampedRatio = ratio.coerceIn(0.2, 1.0)
-        val (major, minor) = ways.partition { it.highway in MAJOR_HIGHWAYS }
-        val minorKeep = if (clampedRatio >= 0.99) {
-            minor
-        } else {
-            val step = (1.0 / clampedRatio).toInt().coerceAtLeast(2)
-            minor.filterIndexed { index, _ -> index % step == 0 }
-        }
-        return (major + minorKeep).map { it.points }
-    }
-
-    private data class StreetWay(val highway: String, val points: List<LatLon>)
-
-    companion object {
-        private const val OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-        private const val USER_AGENT = "DisplayConnect/2.0 (Android navigation app)"
-        private const val METERS_PER_DEG_LAT = 111_320.0
-        const val STREET_SAMPLE_RATIO = 0.55
-
-        private val MAJOR_HIGHWAYS = setOf(
-            "motorway", "trunk", "primary", "secondary", "tertiary"
-        )
+    private suspend fun requestBody(request: Request): String = suspendCancellableCoroutine { continuation ->
+        val call = client.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) continuation.resumeWithException(e)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val body = response.use {
+                        check(it.isSuccessful) { "Falha no servidor de mapas (HTTP " + it.code + "). Aguarde e tente novamente." }
+                        val stream = it.body?.byteStream() ?: error("Resposta vazia do mapa")
+                        val output = ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val count = stream.read(buffer)
+                            if (count < 0) break
+                            check(output.size() + count <= 20 * 1024 * 1024) { "Resposta de mapa muito grande" }
+                            output.write(buffer, 0, count)
+                        }
+                        output.toString("UTF-8")
+                    }
+                    if (continuation.isActive) continuation.resume(body)
+                } catch (e: Exception) {
+                    if (continuation.isActive) continuation.resumeWithException(e)
+                }
+            }
+        })
     }
 }

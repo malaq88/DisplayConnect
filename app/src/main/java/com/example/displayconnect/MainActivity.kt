@@ -14,6 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import com.example.displayconnect.utils.AppLanguage
 import com.example.displayconnect.ui.navigation.DisplayConnectNavHost
 import com.example.displayconnect.ui.theme.DisplayConnectTheme
 import com.example.displayconnect.viewmodel.MainViewModel
@@ -57,6 +64,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
+            val language by AppLanguage.language.collectAsState()
+            val deviceConfiguration = LocalConfiguration.current
+            val localized = remember(language, deviceConfiguration) { AppLanguage.context(this, language) }
+            CompositionLocalProvider(LocalContext provides localized, LocalConfiguration provides localized.resources.configuration) {
             DisplayConnectTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     DisplayConnectNavHost(
@@ -65,6 +76,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
+            }
             }
         }
     }

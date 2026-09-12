@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,17 +37,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.displayconnect.R
 import com.example.displayconnect.models.ConnectionState
 import com.example.displayconnect.routing.RouteProfile
 import com.example.displayconnect.ui.components.ConnectionIndicator
-import com.example.displayconnect.ui.components.StatsCard
+import com.example.displayconnect.ui.components.TripProgressCard
+import com.example.displayconnect.ui.components.OfflineMapCard
 import com.example.displayconnect.ui.navigation.MainTopBar
 import com.example.displayconnect.viewmodel.MainViewModel
 
@@ -59,9 +62,12 @@ fun MainScreen(
     viewModel: MainViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
+    val tripProgress by viewModel.tripProgress.collectAsState()
+    val offlineMap by viewModel.offlineMap.collectAsState()
+    val gps by viewModel.gps.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val isConnected = uiState.connectionState == ConnectionState.CONNECTED
+    val uriHandler = LocalUriHandler.current
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { message ->
@@ -85,6 +91,12 @@ fun MainScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             ConnectionIndicator(state = uiState.connectionState)
+            if (uiState.isNavigating) TripProgressCard(tripProgress)
+            if (uiState.isNavigating) Text(
+                stringResource(if (gps.weak) R.string.gps_weak else R.string.gps_accuracy, gps.accuracyM?.toInt() ?: 0),
+                color = if (gps.weak) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall)
+            if (uiState.isNavigating) OfflineMapCard(offlineMap, viewModel::retryOfflineDownload)
 
             Text(
                 text = stringResource(R.string.ble_section),
@@ -179,8 +191,6 @@ fun MainScreen(
                 }
             }
 
-            StatsCard(stats = uiState.stats)
-
             Text(
                 text = stringResource(R.string.navigation_section),
                 style = MaterialTheme.typography.titleMedium
@@ -214,8 +224,25 @@ fun MainScreen(
                 onValueChange = viewModel::updateDestQuery,
                 label = { Text(stringResource(R.string.dest_search)) },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = false,
-                maxLines = 2,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    if (!uiState.isSearching) viewModel.searchDestination()
+                }),
+                enabled = !uiState.isNavigating
+            )
+
+            OutlinedTextField(
+                value = uiState.searchCity,
+                onValueChange = viewModel::updateSearchCity,
+                label = { Text(stringResource(R.string.search_city)) },
+                supportingText = { Text(stringResource(R.string.search_city_hint)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    if (!uiState.isSearching) viewModel.searchDestination()
+                }),
                 enabled = !uiState.isNavigating
             )
 
@@ -252,11 +279,15 @@ fun MainScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
-                        Text(
-                            text = result.displayName,
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(result.displayName, style = MaterialTheme.typography.bodyMedium)
+                            if (result.houseNumberUnconfirmed) Text(
+                                stringResource(R.string.search_number_unconfirmed),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary)
+                            Text(result.source, style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
@@ -268,6 +299,12 @@ fun MainScreen(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
+
+            Text(stringResource(R.string.search_attribution), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.fix_map), color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { uriHandler.openUri("https://www.openstreetmap.org/fixthemap") },
+                style = MaterialTheme.typography.bodySmall)
 
             Text(
                 text = stringResource(R.string.dest_coords_section),
@@ -309,16 +346,6 @@ fun MainScreen(
                 )
             ) {
                 Text(stringResource(R.string.start_navigation))
-            }
-
-            OutlinedButton(
-                onClick = {
-                    viewModel.startMapsBrowserNavigation(context, onRequestLocationPermission)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = isConnected && !uiState.isNavigating
-            ) {
-                Text(stringResource(R.string.start_maps_browser))
             }
 
             if (uiState.isNavigating) {

@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -32,6 +34,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val navClient = app.navClient
     private val settingsRepository = app.settingsRepository
     private val geocoder = NominatimGeocoder()
+    private var searchJob: Job? = null
+    val tripProgress = TransmissionHub.tripProgress
+    val offlineMap = TransmissionHub.offlineMap
+    val gps = TransmissionHub.gps
+
+    fun retryOfflineDownload() = NavigationForegroundService.retryDownload(getApplication())
 
     private var pendingMapsBrowser = false
     private var pendingBleAction: (() -> Unit)? = null
@@ -40,6 +48,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            combine(com.example.displayconnect.utils.AppLanguage.language, navClient.connectionState) { lang, connection -> lang to connection }
+                .collect { (lang, connection) ->
+                    if (connection == com.example.displayconnect.models.ConnectionState.CONNECTED) {
+                        navClient.sendNavMessage(org.json.JSONObject().put("type", "config").put("lang", lang).toString())
+                    }
+                }
+        }
+        viewModelScope.launch {
+            TransmissionHub.navigationError.collect { error ->
+                if (error != null) {
+                    _uiState.update { it.copy(errorMessage = error) }
+                    TransmissionHub.clearNavigationError()
+                }
+            }
+        }
         viewModelScope.launch {
             combine(
                 settingsRepository.settings,
@@ -65,7 +89,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         scannedDevices = current.scannedDevices,
                         isScanning = current.isScanning,
                         searchResults = current.searchResults,
-                        isSearching = current.isSearching
+                        isSearching = current.isSearching,
+                        searchCity = current.searchCity,
+                        errorMessage = current.errorMessage
                     )
                 }
             }
@@ -85,10 +111,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateDestQuery(value: String) {
-        _uiState.update { it.copy(destQuery = value) }
+        searchJob?.cancel()
+        _uiState.update { it.copy(destQuery = value, destLabel = "", destLat = "", destLon = "",
+            searchResults = emptyList(), isSearching = false, errorMessage = null) }
         viewModelScope.launch {
-            settingsRepository.updateSettings { it.copy(destQuery = value) }
+            settingsRepository.updateSettings { it.copy(destQuery = value, destLabel = "", destLat = "", destLon = "") }
         }
+    }
+
+    fun updateSearchCity(value: String) {
+        _uiState.update { it.copy(searchCity = value) }
+        updateDestQuery(_uiState.value.destQuery)
     }
 
     fun updateDestLat(value: String) {
@@ -109,26 +142,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun searchDestination() {
+        searchJob?.cancel()
         val query = _uiState.value.destQuery.trim()
+        val city = _uiState.value.searchCity.trim()
         if (query.length < 3) {
             _uiState.update {
-                it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_search_too_short))
+                it.copy(errorMessage = com.example.displayconnect.utils.AppLanguage.context(getApplication()).getString(R.string.error_search_too_short))
             }
             return
         }
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSearching = true, searchResults = emptyList()) }
-            geocoder.search(query)
+        searchJob = viewModelScope.launch {
+            _uiState.update { it.copy(isSearching = true, searchResults = emptyList(), errorMessage = null) }
+            geocoder.search(query, city)
                 .onSuccess { results ->
+                    ensureActive()
                     _uiState.update { it.copy(searchResults = results, isSearching = false) }
                 }
                 .onFailure { error ->
-                    val appCtx = getApplication<DisplayConnectApp>()
+                    ensureActive()
+                    val appCtx = com.example.displayconnect.utils.AppLanguage.context(getApplication())
                     val message = when (error.message) {
                         "No places found" -> appCtx.getString(R.string.error_place_not_found)
                         "Query too short" -> appCtx.getString(R.string.error_search_too_short)
-                        else -> error.message ?: appCtx.getString(R.string.error_search_failed)
+                        else -> appCtx.getString(R.string.error_search_failed)
                     }
                     _uiState.update {
                         it.copy(
@@ -177,7 +214,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         runWithBluetoothPermission(onNeedBluetoothPermission) {
             if (!navClient.isBluetoothEnabled()) {
                 _uiState.update {
-                    it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_bluetooth_disabled))
+                    it.copy(errorMessage = com.example.displayconnect.utils.AppLanguage.context(getApplication()).getString(R.string.error_bluetooth_disabled))
                 }
                 return@runWithBluetoothPermission
             }
@@ -206,14 +243,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val address = _uiState.value.bleDeviceAddress
         if (address.isBlank()) {
             _uiState.update {
-                it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_no_ble_device))
+                it.copy(errorMessage = com.example.displayconnect.utils.AppLanguage.context(getApplication()).getString(R.string.error_no_ble_device))
             }
             return
         }
         runWithBluetoothPermission(onNeedBluetoothPermission) {
             if (!navClient.isBluetoothEnabled()) {
                 _uiState.update {
-                    it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_bluetooth_disabled))
+                    it.copy(errorMessage = com.example.displayconnect.utils.AppLanguage.context(getApplication()).getString(R.string.error_bluetooth_disabled))
                 }
                 return@runWithBluetoothPermission
             }
@@ -264,6 +301,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onLocationPermissionGranted() {
+        if (!hasPreciseLocationPermission()) {
+            _uiState.update { it.copy(errorMessage = com.example.displayconnect.utils.AppLanguage.context(getApplication()).getString(R.string.error_precise_location)) }
+            return
+        }
         val coords = resolveDestination() ?: return
         val (lat, lon) = coords
         if (pendingMapsBrowser) {
@@ -277,11 +318,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun ensureConnectedAndDestination(): Boolean {
         val state = _uiState.value
         if (state.connectionState != com.example.displayconnect.models.ConnectionState.CONNECTED) {
-            _uiState.update { it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_not_connected)) }
+            _uiState.update { it.copy(errorMessage = com.example.displayconnect.utils.AppLanguage.context(getApplication()).getString(R.string.error_not_connected)) }
             return false
         }
         if (resolveDestination() == null) {
-            _uiState.update { it.copy(errorMessage = getApplication<DisplayConnectApp>().getString(R.string.error_invalid_destination)) }
+            _uiState.update { it.copy(errorMessage = com.example.displayconnect.utils.AppLanguage.context(getApplication()).getString(R.string.error_invalid_destination)) }
             return false
         }
         return true
@@ -310,10 +351,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun hasLocationPermission(): Boolean {
+        return hasPreciseLocationPermission()
+    }
+
+    private fun hasPreciseLocationPermission(): Boolean {
         val appCtx = getApplication<Application>()
         return ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
     }
 

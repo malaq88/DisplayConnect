@@ -2,7 +2,7 @@
 
 Objetivo: substituir espelhamento JPEG por **navegação via JSON** com **mapa desenhado na CYD** (rota + posição + manobra).
 
-**Status atual:** MVP v2 concluído no `master`. Melhorias pós-v2.0 também implementadas.
+**Status atual:** v3.0 no `master` (tag `v3.0`). MVP v2 + melhorias pós-v2.0 + port CYD das melhorias de [PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1).
 
 ---
 
@@ -104,6 +104,21 @@ Objetivo: substituir espelhamento JPEG por **navegação via JSON** com **mapa d
 
 ---
 
+## Fase 10 — v3.0 (CYD + qualidade de navegação)
+
+Porta, para a CYD 240×320, do trabalho publicado em [PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1) (LOLIN32 + ST7796S). Sem o driver/hardware daquele fork.
+
+- [x] **10.1** Projeção com eixos iguais + recorte de segmentos (`ScreenGeometry`, `[-1,-1]`)
+- [x] **10.2** Até 128 ruas no JSON/firmware CYD (orçamento de RAM)
+- [x] **10.3** Filtro GPS + remaining time/distance + `gps_weak` / `off_route`
+- [x] **10.4** OSRM FOSSGIS (`routed-car` / `routed-bike` / `routed-foot`)
+- [x] **10.5** Nominatim + Photon, idioma PT/EN, fonte Latin-1 no overlay
+- [x] **10.6** Download persistente de ruas ao longo da rota
+- [x] **10.7** BLE: fila conflated + ACK GATT; buffers maiores no firmware
+- [x] **10.8** Protocolo alinhado no `DisplaySenderIDF` (JC3248W535EN)
+
+---
+
 ## Fase 6 — Opcional: mapa com tiles OSM na ESP
 
 - [ ] **6.1** Android envia `zoom` + bbox ou tile indices
@@ -129,7 +144,7 @@ Objetivo: substituir espelhamento JPEG por **navegação via JSON** com **mapa d
 ## Ordem recomendada (próximos passos)
 
 ```
-Concluído: Fase 0–5 + Fase 8 + Fase 9
+Concluído: Fase 0–5 + Fase 8 + Fase 9 + Fase 10 (v3.0)
 Pendente útil: 3.8 (reroute), 4.3 (ícones), 4.6 (notificação rica)
 Opcional: Fase 6 ou 7
 ```

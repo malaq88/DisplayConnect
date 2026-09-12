@@ -1,6 +1,7 @@
 #include "map_renderer.h"
 #include "html_renderer.h"
 #include "maps_theme.h"
+#include "utf8_text.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -186,23 +187,40 @@ void MapRenderer::drawOverlay(const NavState& state) {
     snprintf(distLine, sizeof(distLine), "%d m", state.distanceM);
   }
 
-  tft.setTextColor(mapsColAccent(), mapsColCard());
-  tft.drawString(distLine, 8, MAP_AREA_H + 14, 2);
+  const char* distOrGps = state.gpsWeak
+      ? (state.english ? "Weak GPS" : "GPS fraco")
+      : distLine;
+  drawUtf8Text(tft, distOrGps, 8, MAP_AREA_H + 10, textMaxW, mapsColAccent(), mapsColCard());
 
   if (state.instruction[0] != '\0') {
-    tft.setTextColor(mapsColText(), mapsColCard());
-    /* Truncate so text doesn't collide with switch */
-    char instr[40];
-    strncpy(instr, state.instruction, sizeof(instr) - 1);
-    instr[sizeof(instr) - 1] = '\0';
-    while (tft.textWidth(instr, 2) > textMaxW && strlen(instr) > 4) {
-      instr[strlen(instr) - 1] = '\0';
-    }
-    tft.drawString(instr, 8, MAP_AREA_H + 36, 2);
+    drawUtf8Text(tft, state.instruction, 8, MAP_AREA_H + 30, textMaxW, mapsColText(), mapsColCard());
   }
   if (state.street[0] != '\0') {
+    drawUtf8Text(tft, state.street, 8, MAP_AREA_H + 50, textMaxW, mapsColMuted(), mapsColCard());
+  }
+
+  char remaining[40] = "";
+  if (state.offRoute) {
+    snprintf(remaining, sizeof(remaining), "%s", state.english ? "Off route" : "Fora da rota");
+  } else if (state.remainingM >= 0 || state.remainingS >= 0) {
+    char km[16] = "--";
+    char mins[16] = "--";
+    if (state.remainingM >= 0) {
+      snprintf(km, sizeof(km), state.remainingM < 1000 ? "%.2f km" : "%.1f km", state.remainingM / 1000.0);
+    }
+    if (state.remainingS >= 0) {
+      const int minutes = state.remainingS / 60 + (state.remainingS % 60 != 0);
+      if (minutes >= 60) {
+        snprintf(mins, sizeof(mins), "%dh%02d", minutes / 60, minutes % 60);
+      } else {
+        snprintf(mins, sizeof(mins), "%d min", minutes);
+      }
+    }
+    snprintf(remaining, sizeof(remaining), "%s · %s", km, mins);
+  }
+  if (remaining[0] != '\0') {
     tft.setTextColor(mapsColMuted(), mapsColCard());
-    tft.drawString(state.street, 8, MAP_AREA_H + 58, 2);
+    tft.drawString(remaining, 8, MAP_AREA_H + 72, 1);
   }
 
   drawThemeSwitchAt(SW_X, SW_Y);

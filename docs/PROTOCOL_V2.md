@@ -89,6 +89,11 @@ Shows a loading screen on the CYD (spinner + “Getting directions…”) until 
   "bearing": 127.5,
   "instruction": "Turn right",
   "distance_m": 200,
+  "remaining_m": 5400,
+  "remaining_s": 980,
+  "off_route": false,
+  "lang": "pt-BR",
+  "gps_weak": false,
   "street": "Av. Paulista",
   "route": [[120, 80], [125, 90], [130, 100]],
   "streets": [[10, 20, 50, 40], [100, 30, 140, 60]],
@@ -107,17 +112,32 @@ Shows a loading screen on the CYD (spinner + “Getting directions…”) until 
 | `distance_m` | int | Distance to next maneuver in meters |
 | `street` | string | Street name for current step (optional) |
 | `route` | array | Polyline `[[x,y], ...]` in **map pixels** (max 64 points on ESP) |
-| `streets` | array | Optional road segments `[[x0,y0,x1,y1], ...]` for map context (max 56 on ESP) |
+| `streets` | array | Optional road segments `[[x0,y0,x1,y1], ...]` (max **128** on CYD) |
 | `user_x`, `user_y` | int | Current position on map in pixels |
 | `html` | string | Optional HTML fragment (max ~480 chars); ESP strips tags and draws plain text |
+| `remaining_m` | int | Remaining route distance in meters; `-1` if unknown |
+| `remaining_s` | int | Remaining duration in seconds; `-1` if unknown |
+| `off_route` | bool | Position is off the route |
+| `lang` | string | `pt-BR` or `en` |
+| `gps_weak` | bool | GPS is stale/imprecise; firmware may keep the last good puck |
+
+`[-1,-1]` in `route` marks a gap: the renderer must **not** connect the previous point to the next (off-screen excursion).
+
+### Config
+
+```json
+{"type":"config","lang":"pt-BR"}
+```
+
+Sent when BLE connects or the user changes language. The CYD persists the preference.
 
 ### Map pixel space
 
 - Map area: **240 × 232** pixels (top of the 240×320 display)
 - Origin: top-left `(0, 0)`
 - Center of map = current GPS position
-- Scale controlled by Android setting `mapScaleMeters` (half-width of visible area in meters)
-- Bottom **88 px** overlay: maneuver text + on-device **light/dark theme switch** (UI only; not in the protocol)
+- Scale: `mapScaleMeters` is the **vertical** half-range; both axes use the same meters/pixel (roads are not stretched)
+- Bottom **88 px** overlay: maneuver, remaining time/distance, GPS-weak hint + on-device **light/dark theme switch**
 
 Theme preference is stored on the CYD in NVS and does not affect the JSON schema.
 
@@ -125,13 +145,13 @@ Theme preference is stored on the CYD in NVS and does not affect the JSON schema
 
 ## Android pipeline (per update)
 
-1. `LocationTracker` emits GPS fix at 1–5 Hz.
-2. `NavigationEngine` loads OSRM route for destination and selected `RouteProfile`.
-3. `MapProjector.projectRoute()` converts route lat/lon → pixels, centered on user.
-4. `OverpassStreetProvider` fetches OSM ways when user moves ~35% of map width (cached).
-5. `StreetContextProjector.projectSegments()` converts street ways → line segments in pixels.
+1. `LocationTracker` emits GPS fixes; `GpsFilter` rejects stale, imprecise, and implausible jumps.
+2. `NavigationEngine` loads OSRM route (FOSSGIS car/bike/foot) and remaining distance/time.
+3. `MapProjector` + `ScreenGeometry` project with equal axes and clip segments (gaps as `[-1,-1]`).
+4. `OfflineMapRepository` supplies Overpass streets along the whole corridor (persisted).
+5. `StreetContextProjector` distributes up to **128** visible segments across the screen.
 6. `NavMessage` is built and serialized with `org.json`.
-7. `BleNavClient` writes the string + `\n` over BLE UART RX (chunked to MTU).
+7. `BleNavClient` keeps only the latest frame, then writes with GATT ACKs (chunked to MTU).
 
 Typical payload size: **under 2 KB**.
 
@@ -151,14 +171,14 @@ Typical payload size: **under 2 KB**.
 
 ## Route profiles (Android → OSRM)
 
-| UI label | OSRM profile | Notes |
-|----------|--------------|-------|
-| Car | `driving` | Default |
-| Motorcycle | `driving` | Public OSRM has no dedicated motorcycle profile |
-| Bike | `cycling` | Bike paths where OSM/OSRM data exists |
-| Walking | `walking` | Pedestrian paths |
+| UI label | Graph | Notes |
+|----------|-------|-------|
+| Car | `https://routing.openstreetmap.de/routed-car/route/v1/driving/` | Default |
+| Motorcycle | same car graph | No dedicated motorcycle graph |
+| Bike | `.../routed-bike/route/v1/cycling/` | Separate FOSSGIS bike graph |
+| Walking | `.../routed-foot/route/v1/walking/` | Separate FOSSGIS foot graph |
 
-URL pattern: `https://router.project-osrm.org/route/v1/{profile}/{lon1},{lat1};{lon2},{lat2}?overview=full&geometries=geojson&steps=true`
+Changing only `/v1/{profile}` on `router.project-osrm.org` does **not** switch the routing graph. v3.0 uses the FOSSGIS hosts above.
 
 ---
 
@@ -166,9 +186,10 @@ URL pattern: `https://router.project-osrm.org/route/v1/{profile}/{lon1},{lat1};{
 
 | API | Purpose | API key |
 |-----|---------|---------|
-| OSRM (`router.project-osrm.org`) | Turn-by-turn route + geometry | No |
+| OSRM FOSSGIS (`routing.openstreetmap.de`) | Turn-by-turn route + geometry | No |
 | Nominatim (`nominatim.openstreetmap.org`) | Address / place search | No (respect usage policy) |
-| Overpass (`overpass-api.de`) | Nearby road geometry | No (rate limit) |
+| Photon (`photon.komoot.io`) | Complementary search | No |
+| Overpass (`overpass-api.de`) | Road geometry along the route | No (rate limit) |
 
 The ESP32 does not call these APIs and does not need Wi‑Fi for navigation display.
 
@@ -197,14 +218,14 @@ The ESP32 does **not** render HTML/CSS — `html_renderer` strips simple tags an
 - **XPT2046_Touchscreen** — resistive touch for the on-device theme switch
 - **Preferences** (ESP32 Arduino core) — persist light/dark theme in NVS
 
-Firmware UI modules: `map_renderer`, `maps_theme`, `touch_cyd`, `loading_screen`, `html_renderer`.
+Firmware UI modules: `map_renderer`, `maps_theme`, `touch_cyd`, `loading_screen`, `html_renderer`, `utf8_text`.
 
 ### Android
 
 - **Android BLE APIs** (`BluetoothLeScanner`, `BluetoothGatt`) — NUS client
 - **Play Services Location** — GPS
 - **org.json** — `NavMessage` serialization
-- **OkHttp** — HTTP for OSRM, Nominatim, Overpass (internet, not CYD link)
+- **OkHttp** — HTTP for OSRM (FOSSGIS), Nominatim, Photon, Overpass (internet, not CYD link)
 
 ---
 
@@ -214,4 +235,6 @@ Firmware UI modules: `map_renderer`, `maps_theme`, `touch_cyd`, `loading_screen`
 |-----------|-----------|
 | v1.0 | Binary WebSocket + JPEG |
 | Early v2.0 | Text WebSocket JSON (`ws://IP:81`) |
-| Current | **BLE UART** + newline-delimited JSON |
+| Current | **BLE UART** + newline-delimited JSON (**v3.0**: remaining time, `gps_weak`, `lang`, 128 street segments) |
+
+v3.0 protocol extensions were adapted from [PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1) for the CYD 240×232 map (not the 480×232 ST7796S layout).

@@ -10,6 +10,7 @@ data class MainUiState(
     val scannedDevices: List<BleDeviceItem> = emptyList(),
     val isScanning: Boolean = false,
     val destQuery: String = "",
+    val searchCity: String = "",
     val destLabel: String = "",
     val destLat: String = "",
     val destLon: String = "",

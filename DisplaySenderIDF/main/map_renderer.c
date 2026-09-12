@@ -254,7 +254,8 @@ static void draw_overlay_content(ui_t *ui, const nav_state_t *state)
             snprintf(dist_line, sizeof(dist_line), "%d m", state->distance_m);
         }
 
-        ui_text(ui, text_x, y0, dist_line, 2, maps_col_accent());
+        ui_text(ui, text_x, y0, state->gps_weak ? (state->english ? "Weak GPS" : "GPS fraco") : dist_line,
+                2, maps_col_accent());
 
         if (state->instruction[0]) {
             char instr[40];
@@ -267,6 +268,30 @@ static void draw_overlay_content(ui_t *ui, const nav_state_t *state)
         }
         if (state->street[0]) {
             ui_text(ui, text_x, y0 + 56, state->street, 1, maps_col_muted());
+        }
+
+        char remaining[40] = "";
+        if (state->off_route) {
+            snprintf(remaining, sizeof(remaining), "%s", state->english ? "Off route" : "Fora da rota");
+        } else if (state->remaining_m >= 0 || state->remaining_s >= 0) {
+            char km[16] = "--";
+            char mins[16] = "--";
+            if (state->remaining_m >= 0) {
+                snprintf(km, sizeof(km), state->remaining_m < 1000 ? "%.2f km" : "%.1f km",
+                         state->remaining_m / 1000.0);
+            }
+            if (state->remaining_s >= 0) {
+                int minutes = state->remaining_s / 60 + (state->remaining_s % 60 != 0);
+                if (minutes >= 60) {
+                    snprintf(mins, sizeof(mins), "%dh%02d", minutes / 60, minutes % 60);
+                } else {
+                    snprintf(mins, sizeof(mins), "%d min", minutes);
+                }
+            }
+            snprintf(remaining, sizeof(remaining), "%s · %s", km, mins);
+        }
+        if (remaining[0]) {
+            ui_text(ui, text_x, y0 + 78, remaining, 1, maps_col_muted());
         }
     }
 
