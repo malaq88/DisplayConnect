@@ -6,3 +6,4 @@
 
 bool is_loading_json(const char *json, size_t length);
 bool parse_nav_json(const char *json, size_t length, nav_state_t *state);
+bool parse_config_json(const char *json, size_t length, bool *english);

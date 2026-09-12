@@ -33,7 +33,7 @@ BleNavClient.sendNavMessage()  ──BLE UART (NUS)──►  line buffer
 | Property | Value |
 |----------|-------|
 | Link | Bluetooth Low Energy GATT |
-| Device name | `DisplayConnect-CYD` |
+| Device name | `DisplayConnect-CYD` or `DisplayConnect-S3` |
 | Service UUID | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` |
 | RX (phone → CYD) | `6E400002-...` — Write / Write Without Response |
 | TX (CYD → phone) | `6E400003-...` — Notify |
@@ -129,7 +129,7 @@ Shows a loading screen on the CYD (spinner + “Getting directions…”) until 
 {"type":"config","lang":"pt-BR"}
 ```
 
-Sent when BLE connects or the user changes language. The CYD persists the preference.
+Sent when BLE connects or the user changes language. The ESP32 (CYD `DisplaySender/` and JC3248W535EN `DisplaySenderIDF/`) persists the preference in NVS (`display-lang` / `en`).
 
 ### Map pixel space
 
@@ -165,7 +165,7 @@ Typical payload size: **under 2 KB**.
 2. Draw `streets` — road casing then fill
 3. Draw `route` polyline — blue with light edge (two passes)
 4. Draw user puck + bearing arrow
-5. Draw bottom sheet overlay: distance, instruction, street (or HTML text) + theme switch
+5. Draw bottom sheet overlay: distance / GPS-weak, UTF-8 instruction + street (Latin-1 font), remaining `km · min` or off-route, theme switch
 
 ---
 
@@ -219,6 +219,8 @@ The ESP32 does **not** render HTML/CSS — `html_renderer` strips simple tags an
 - **Preferences** (ESP32 Arduino core) — persist light/dark theme in NVS
 
 Firmware UI modules: `map_renderer`, `maps_theme`, `touch_cyd`, `loading_screen`, `html_renderer`, `utf8_text`.
+
+**ESP-IDF (JC3248W535EN):** `DisplaySenderIDF/` — NimBLE NUS, cJSON, framebuffer QSPI, same JSON protocol. The Android map is still **240×232**; the firmware **scales** to 320×370 plus overlay. Overlay text uses the same Latin-1 bitmap font as the CYD (`latin_font.h` / `utf8_text.c`).
 
 ### Android
 

@@ -9,6 +9,7 @@ idf_component_register(
         "loading_screen.c"
         "maps_theme.c"
         "touch.c"
+        "utf8_text.c"
     INCLUDE_DIRS "."
     REQUIRES
         nvs_flash

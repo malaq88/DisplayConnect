@@ -1,5 +1,6 @@
 #include "nav_protocol.h"
 
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -19,6 +20,29 @@ static void copy_truncated(char *dest, size_t dest_size, const char *src)
     }
     strncpy(dest, src, dest_size - 1);
     dest[dest_size - 1] = '\0';
+    /* Do not split a UTF-8 sequence at the buffer edge. */
+    size_t valid = 0;
+    for (size_t i = 0; dest[i];) {
+        const uint8_t lead = (uint8_t)dest[i];
+        const size_t bytes = lead < 128 ? 1
+            : (lead & 0xE0) == 0xC0 ? 2
+            : (lead & 0xF0) == 0xE0 ? 3
+            : (lead & 0xF8) == 0xF0 ? 4 : 1;
+        bool complete = true;
+        for (size_t n = 1; n < bytes; ++n) {
+            if (i + n >= dest_size || dest[i + n] == '\0' ||
+                ((uint8_t)dest[i + n] & 0xC0) != 0x80) {
+                complete = false;
+                break;
+            }
+        }
+        if (!complete) {
+            break;
+        }
+        i += bytes;
+        valid = i;
+    }
+    dest[valid] = '\0';
 }
 
 bool is_loading_json(const char *json, size_t length)
@@ -28,6 +52,35 @@ bool is_loading_json(const char *json, size_t length)
     }
     return strstr(json, "\"type\":\"loading\"") != NULL ||
            strstr(json, "\"type\": \"loading\"") != NULL;
+}
+
+bool parse_config_json(const char *json, size_t length, bool *english)
+{
+    if (!json || !english || length == 0 || length >= 150) {
+        return false;
+    }
+    if (strstr(json, "\"type\":\"config\"") == NULL &&
+        strstr(json, "\"type\": \"config\"") == NULL) {
+        return false;
+    }
+
+    cJSON *doc = cJSON_ParseWithLength(json, length);
+    if (!doc) {
+        return false;
+    }
+
+    const cJSON *type = cJSON_GetObjectItemCaseSensitive(doc, "type");
+    if (!cJSON_IsString(type) || !type->valuestring ||
+        strcmp(type->valuestring, "config") != 0) {
+        cJSON_Delete(doc);
+        return false;
+    }
+
+    const cJSON *lang = cJSON_GetObjectItemCaseSensitive(doc, "lang");
+    *english = cJSON_IsString(lang) && lang->valuestring &&
+               strcmp(lang->valuestring, "en") == 0;
+    cJSON_Delete(doc);
+    return true;
 }
 
 bool parse_nav_json(const char *json, size_t length, nav_state_t *state)

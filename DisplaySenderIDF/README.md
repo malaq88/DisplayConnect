@@ -22,10 +22,13 @@ Pinos QSPI (já na placa): CS=45, CLK=47, D0=21, D1=48, D2=40, D3=39, BL=1.
 
 ## UI
 
-Mesmo visual estilo Maps do `DisplaySender/` (tema claro padrão / escuro opcional):
+Mesmo visual e comportamento do `DisplaySender/` (tema claro padrão / escuro opcional), na resolução **320×480** da JC3248W535EN:
 
 - Ruas com casing, rota azul, puck, bottom sheet
+- Overlay UTF-8 com fonte Latin-1 (acentos em ruas/instruções), tempo/distância restantes, GPS fraco, fora da rota
+- Idioma PT/EN via JSON `config`/`lang` (persistido em NVS `display-lang`)
 - Switch L/D por toque capacitivo; preferência em NVS (`ui` / `theme`)
+- Overflow BLE descarta o frame incompleto (igual à CYD), em vez de concatenar lixo
 
 ## Pré-requisitos
 
@@ -57,8 +60,8 @@ idf.py build
 ## App Android
 
 1. No app, escaneie BLE e conecte em **DisplayConnect-S3** (mesmo NUS / framing `\n` do CYD).
-2. O Android projeta o mapa em **240×232**; este firmware **escala** para 320×370 (área de mapa) + overlay.
-3. A partir da **v3.0** o overlay também mostra tempo/distância restantes, GPS fraco e fora da rota.
+2. O Android projeta o mapa em **240×232**; este firmware **escala** para 320×370 (área de mapa) + overlay. O JSON é o mesmo da CYD.
+3. A partir da **v3.0** o overlay mostra tempo/distância restantes, GPS fraco, fora da rota e texto UTF-8 (igual ao `DisplaySender/`).
 
 Protocolo: [docs/PROTOCOL_V2.md](../docs/PROTOCOL_V2.md). Melhorias de navegação da v3.0 adaptadas de [PLZ-1/DisplayConnectV2.1](https://github.com/PLZ-1/DisplayConnectV2.1).
 
@@ -73,8 +76,10 @@ DisplaySenderIDF/
 │   ├── ui.c              # framebuffer PSRAM + primitives
 │   ├── touch.c           # touch I2C AXS15231B
 │   ├── maps_theme.c      # paleta claro/escuro + NVS
-│   ├── nav_protocol.c    # parse JSON (cJSON)
+│   ├── nav_protocol.c    # parse JSON (cJSON) + config/lang
 │   ├── map_renderer.c    # ruas / rota / puck / overlay / switch
+│   ├── utf8_text.c       # fonte Latin-1 + idioma NVS
+│   ├── latin_font.h      # glifos 20px (ASCII + Latin-1)
 │   └── loading_screen.c
 ├── sdkconfig.defaults    # PSRAM, flash 16MB, NimBLE
 └── partitions.csv

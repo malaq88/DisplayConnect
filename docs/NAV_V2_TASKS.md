@@ -115,7 +115,7 @@ Porta, para a CYD 240×320, do trabalho publicado em [PLZ-1/DisplayConnectV2.1](
 - [x] **10.5** Nominatim + Photon, idioma PT/EN, fonte Latin-1 no overlay
 - [x] **10.6** Download persistente de ruas ao longo da rota
 - [x] **10.7** BLE: fila conflated + ACK GATT; buffers maiores no firmware
-- [x] **10.8** Protocolo alinhado no `DisplaySenderIDF` (JC3248W535EN)
+- [x] **10.8** `DisplaySenderIDF` (JC3248W535EN): mesmo protocolo, overlay UTF-8/Latin-1, `config`/`lang` e overflow BLE da CYD
 
 ---
 

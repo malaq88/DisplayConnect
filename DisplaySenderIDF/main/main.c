@@ -28,6 +28,7 @@
 #include "nav_types.h"
 #include "touch.h"
 #include "ui.h"
+#include "utf8_text.h"
 
 static const char *TAG = "main";
 
@@ -52,6 +53,8 @@ static uint32_t s_last_theme_toggle_ms = 0;
 #define LINE_BUF_SIZE 8192
 static char s_line_buf[LINE_BUF_SIZE];
 static size_t s_line_len = 0;
+static bool s_discard_line = false;
+static volatile bool s_rx_overflow = false;
 
 #define RX_QUEUE_LEN 16384
 static QueueHandle_t s_rx_queue;
@@ -62,6 +65,7 @@ static void on_ble_rx(const uint8_t *data, size_t len, void *ctx)
     for (size_t i = 0; i < len; i++) {
         if (xQueueSend(s_rx_queue, &data[i], 0) != pdTRUE) {
             s_rx_dropped++;
+            s_rx_overflow = true;
             break;
         }
     }
@@ -76,7 +80,9 @@ static void on_ble_conn(bool connected, void *ctx)
         s_updates_per_sec = 0;
         s_last_stats_ms = (uint32_t)(esp_timer_get_time() / 1000);
         s_line_len = 0;
+        s_discard_line = false;
         s_rx_dropped = 0;
+        s_rx_overflow = false;
         s_has_nav = false;
         s_showing_waiting = false;
         s_ui_show_loading = true;
@@ -86,6 +92,8 @@ static void on_ble_conn(bool connected, void *ctx)
         s_awaiting_first_nav = false;
         s_nav_updates = 0;
         s_line_len = 0;
+        s_discard_line = false;
+        s_rx_overflow = false;
         s_has_nav = false;
         uint8_t drain;
         while (xQueueReceive(s_rx_queue, &drain, 0) == pdTRUE) {
@@ -100,6 +108,20 @@ static void process_text_message(const char *payload, size_t length)
     ESP_LOGI(TAG, "BLE line %u bytes: %.48s%s",
              (unsigned)length, payload, length > 48 ? "..." : "");
 
+    bool english = false;
+    if (parse_config_json(payload, length, &english)) {
+        set_display_language(english);
+        if (s_has_nav) {
+            s_last_nav.english = display_english();
+            map_renderer_draw(&s_ui, &s_last_nav);
+        } else if (s_showing_waiting) {
+            show_waiting_for_app_screen(&s_ui);
+        } else {
+            show_map_loading_screen(&s_ui);
+        }
+        return;
+    }
+
     if (is_loading_json(payload, length)) {
         s_awaiting_first_nav = true;
         s_has_nav = false;
@@ -113,6 +135,7 @@ static void process_text_message(const char *payload, size_t length)
         return;
     }
 
+    set_display_language(state.english);
     ESP_LOGI(TAG, "Nav OK: route=%d streets=%d dist=%dm",
              state.route_count, state.street_segment_count, state.distance_m);
     s_last_nav = state;
@@ -127,16 +150,21 @@ static void process_text_message(const char *payload, size_t length)
 static void append_rx_byte(char c)
 {
     if (c == '\n' || c == '\r') {
-        if (s_line_len > 0) {
+        if (s_line_len > 0 && !s_discard_line) {
             s_line_buf[s_line_len] = '\0';
             process_text_message(s_line_buf, s_line_len);
-            s_line_len = 0;
         }
+        s_line_len = 0;
+        s_discard_line = false;
+        return;
+    }
+    if (s_discard_line) {
         return;
     }
     if (s_line_len + 1 >= LINE_BUF_SIZE) {
         ESP_LOGW(TAG, "BLE line buffer overflow (%u) — reset", (unsigned)LINE_BUF_SIZE);
         s_line_len = 0;
+        s_discard_line = true;
         return;
     }
     s_line_buf[s_line_len++] = c;
@@ -145,7 +173,15 @@ static void append_rx_byte(char c)
 static void drain_rx_queue(void)
 {
     uint8_t b;
-    /* Drain everything available — do not cap at 256 while UI flushes slowly. */
+    if (s_rx_overflow) {
+        s_rx_overflow = false;
+        while (xQueueReceive(s_rx_queue, &b, 0) == pdTRUE) {
+        }
+        s_line_len = 0;
+        s_discard_line = true;
+        ESP_LOGW(TAG, "BLE overflow: discarded incomplete frame");
+        return;
+    }
     while (xQueueReceive(s_rx_queue, &b, 0) == pdTRUE) {
         append_rx_byte((char)b);
     }
@@ -239,6 +275,7 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     maps_theme_init();
+    init_display_language();
 
     s_rx_queue = xQueueCreate(RX_QUEUE_LEN, sizeof(uint8_t));
     ESP_ERROR_CHECK(s_rx_queue ? ESP_OK : ESP_ERR_NO_MEM);

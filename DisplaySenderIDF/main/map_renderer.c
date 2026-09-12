@@ -1,6 +1,7 @@
 #include "map_renderer.h"
 #include "config.h"
 #include "maps_theme.h"
+#include "utf8_text.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -232,8 +233,9 @@ static void draw_theme_switch_at(ui_t *ui, int sx, int sy)
 static void draw_overlay_content(ui_t *ui, const nav_state_t *state)
 {
     const int text_x = OVERLAY_MARGIN + 4;
-    const int y0 = MAP_AREA_H + 22;
+    const int y0 = MAP_AREA_H + 16;
     const int text_max_w = SW_X - text_x - 8;
+    const bool english = state->english || display_english();
 
     if (state->has_html && state->html[0] != '\0') {
         const char *cursor = state->html;
@@ -241,9 +243,9 @@ static void draw_overlay_content(ui_t *ui, const nav_state_t *state)
         int drawn = 0;
         int y = y0;
         while (drawn < 3 && next_html_line(&cursor, line, sizeof(line))) {
-            ui_text(ui, text_x, y, line, drawn == 0 ? 2 : 1,
-                    drawn == 0 ? maps_col_accent() : maps_col_text());
-            y += (drawn == 0) ? 24 : 16;
+            utf8_text_draw(ui, line, text_x, y, text_max_w,
+                           drawn == 0 ? maps_col_accent() : maps_col_text());
+            y += UTF8_FONT_H;
             drawn++;
         }
     } else {
@@ -254,25 +256,19 @@ static void draw_overlay_content(ui_t *ui, const nav_state_t *state)
             snprintf(dist_line, sizeof(dist_line), "%d m", state->distance_m);
         }
 
-        ui_text(ui, text_x, y0, state->gps_weak ? (state->english ? "Weak GPS" : "GPS fraco") : dist_line,
-                2, maps_col_accent());
+        utf8_text_draw(ui, state->gps_weak ? (english ? "Weak GPS" : "GPS fraco") : dist_line,
+                       text_x, y0, text_max_w, maps_col_accent());
 
         if (state->instruction[0]) {
-            char instr[40];
-            strncpy(instr, state->instruction, sizeof(instr) - 1);
-            instr[sizeof(instr) - 1] = '\0';
-            while (ui_text_width(instr, 2) > text_max_w && strlen(instr) > 4) {
-                instr[strlen(instr) - 1] = '\0';
-            }
-            ui_text(ui, text_x, y0 + 28, instr, 2, maps_col_text());
+            utf8_text_draw(ui, state->instruction, text_x, y0 + 20, text_max_w, maps_col_text());
         }
         if (state->street[0]) {
-            ui_text(ui, text_x, y0 + 56, state->street, 1, maps_col_muted());
+            utf8_text_draw(ui, state->street, text_x, y0 + 40, text_max_w, maps_col_muted());
         }
 
         char remaining[40] = "";
         if (state->off_route) {
-            snprintf(remaining, sizeof(remaining), "%s", state->english ? "Off route" : "Fora da rota");
+            snprintf(remaining, sizeof(remaining), "%s", english ? "Off route" : "Fora da rota");
         } else if (state->remaining_m >= 0 || state->remaining_s >= 0) {
             char km[16] = "--";
             char mins[16] = "--";
@@ -291,7 +287,7 @@ static void draw_overlay_content(ui_t *ui, const nav_state_t *state)
             snprintf(remaining, sizeof(remaining), "%s · %s", km, mins);
         }
         if (remaining[0]) {
-            ui_text(ui, text_x, y0 + 78, remaining, 1, maps_col_muted());
+            utf8_text_draw(ui, remaining, text_x, y0 + 62, text_max_w, maps_col_muted());
         }
     }
 
@@ -326,18 +322,17 @@ void show_status_screen(ui_t *ui, const char *title, const char *line2, const ch
 
     ui_rect(ui, 0, 0, SCR_W, 48, maps_col_card());
     ui_rect(ui, 0, 48, SCR_W, 2, maps_col_card_shadow());
-    ui_text_centered(ui, SCR_W / 2, 16, title, 2, maps_col_text());
+    utf8_text_draw_centered(ui, SCR_W / 2, 14, title, maps_col_text());
 
     const int card_y = SCR_H / 2 - 50;
     ui_rect(ui, 24, card_y, SCR_W - 48, 100, maps_col_card());
     ui_rect(ui, 24, card_y, SCR_W - 48, 3, maps_col_route());
 
     if (line2) {
-        ui_text_centered(ui, SCR_W / 2, card_y + 28, line2, 2, maps_col_accent());
+        utf8_text_draw_centered(ui, SCR_W / 2, card_y + 28, line2, maps_col_accent());
     }
     if (line3) {
-        int scale = (ui_text_width(line3, 2) <= SCR_W - 64) ? 2 : 1;
-        ui_text_centered(ui, SCR_W / 2, card_y + 58, line3, scale, maps_col_muted());
+        utf8_text_draw_centered(ui, SCR_W / 2, card_y + 56, line3, maps_col_muted());
     }
 
     draw_theme_switch_at(ui, SCR_W - 24 - SW_W, SCR_H - 56);
@@ -348,5 +343,7 @@ void show_status_screen(ui_t *ui, const char *title, const char *line2, const ch
 
 void show_waiting_for_app_screen(ui_t *ui)
 {
-    show_status_screen(ui, "Ready to navigate", "Bluetooth LE", BLE_DEVICE_NAME);
+    show_status_screen(ui,
+                       display_english() ? "Ready to navigate" : "Pronto para navegar",
+                       "Bluetooth LE", BLE_DEVICE_NAME);
 }
